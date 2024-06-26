@@ -1,3 +1,0 @@
-{
-    "TestAddTo":"the code generated has compilation faults, fix them. For code t := []float64{7.0, 8.0, 9.0}, no new variables on left side of := and cannot use []float64{…} (value of type []float64) as *testing.T value in assignment. For code result := AddTo(dst, s, t), cannot use t (variable of type *testing.T) as []float64 value in argument to AddTo"
-}

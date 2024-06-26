@@ -1,0 +1,43 @@
+func TestDivTo(t *testing.T) {
+    s := []float64{1.0, 2.0, 3.0}
+    tValues := []float64{0.5, 2.0, 3.0}
+    t := make([]float64, len(tValues))
+    copy(t, tValues)
+
+    dst := make([]float64, len(s))
+
+    DivTo(dst, s, t)
+
+    expected := []float64{2.0, 1.0, 1.0}
+
+    for i, v := range dst {
+        if math.Abs(expected[i]-v) > 0.0001 {
+            t.Errorf("Expected %f, but got %f", expected[i], v)
+        }
+    }
+}
+func TestCount(t *testing.T) {
+	testFunc := func(x float64) bool {
+		return x > 0
+	}
+
+	testCases := []struct {
+		name  string
+		input []float64
+		want  int
+	}{
+		{"all positive numbers", []float64{1.0, 2.0, 3.0, 4.0}, 4},
+		{"all negative numbers", []float64{-1.0, -2.0, -3.0, -4.0}, 0},
+		{"mixed positive and negative numbers", []float64{-1.0, 2.0, -3.4, 4.5}, 2},
+		{"empty input slice", []float64{}, 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Count(testFunc, tc.input)
+			if got != tc.want {
+				t.Errorf("Count(testFunc, %v) = %v; want %v", tc.input, got, tc.want)
+			}
+		})
+	}
+}

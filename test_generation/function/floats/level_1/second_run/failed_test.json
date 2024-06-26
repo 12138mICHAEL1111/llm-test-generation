@@ -1,0 +1,16 @@
+{
+    "TestLogSpan" : "LogSpan([1 3.1622776601683795 10.000000000000002], 1, 10) = [1 3.1622776601683795 10.000000000000002], want [1 2 3] LogSpan([0.5 0.8660254037844386 1.4999999999999998], 0.5, 1.5) = [0.5 0.8660254037844386 1.4999999999999998], want [1.6487212707001282 2.718281828459045 4.481689070338065] LogSpan([0 0 0], 0, 0) = [0 0 0], want [1 1 1]",
+    "TestLogSumExp" : "LogSumExp([0 0 0]) = 1.0986122886681096; want 0, LogSumExp([-1 -2 -3]) = -0.5923940355556196; want -0.619566848691337",
+    "TestNorm" : "Norm([2 3 4], 3) = 4.626065009182741; want 4.497941445275415, Norm([5 5 5 5 5 5 5 5], -Inf) = 1; want 5",
+    "TestWithin": "Expected 2, but got 1 for Within([1 2.5 3 4 5], 2.500000)",
+    "TestMul":"Multiplying_two_slices_with_2_elements_each fails.  Mul() did not panic",
+    "TestCount":"Test Count even numbers fails.  Count() returned 3, expected 2",
+    "TestCumProd":"CumProd([4 20 120], [4 5 6]) = [4 20 120], want [4 10 18], CumProd([3 12], [3 4]) = [3 12], want [3 8]",
+    "TestCumSum":"CumSum([4 9 15], [4 5 6]) = [4 9 15]; want [5 7 9], CumSum([1 3 6], [1 2 3]) = [1 3 6]; want [1 2 3], CumSum([10], [10]) = [10]; want [20]",
+    "TestNearestIdxForSpan":"For n: 5, l: 1.000000, u: +Inf, v: 4.000000 - expected: 4, got: 0, For n: 8, l: -Inf, u: 5.000000, v: 5.000000 - expected: 0, got: 7, For n: 10, l: 5.000000, u: +Inf, v: 8.000000 - expected: 7, got: 0",
+    "TestSpan": "For comparing two variables with NaN values, reflect.DeepEqual will always return false, so change an another way for assertation",
+    "TestFind": "the results of inds is actually a nil value, reflect.DeepEqual will always return false when comparing a nil slice and an empty slice, so change an another way for assertation",
+    "TestArgsortLess": "Expected a.Less(1, 0) to be false. In addition, the code causes panic with the reason: runtime error: index out of range [1] with length 0",
+    "TestArgsortStable":"Indices are not sorted correctly",
+    "TestAddScaledTo":"Failing reason Not equal: expected: []float64{15, 18, 21} actual  : []float64{18, 21, 24}"
+}

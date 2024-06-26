@@ -1,0 +1,140 @@
+Here is the corrected test function for the given Golang function:
+
+```go
+// Filename: argsort_test.go
+package main
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestArgsort_Swap(t *testing.T) {
+	a := argsort{
+		s:    []float64{1, 2, 3, 4, 5},
+		inds: []int{0, 1, 2, 3, 4},
+	}
+
+	a.Swap(1, 3)
+
+	expectedS := []float64{1, 4, 3, 2, 5}
+	expectedInds := []int{0, 3, 2, 1, 4}
+
+	if !reflect.DeepEqual(a.s, expectedS) {
+		t.Errorf("Expected s to be %v, but got %v", expectedS, a.s)
+	}
+
+	if !reflect.DeepEqual(a.inds, expectedInds) {
+		t.Errorf("Expected inds to be %v, but got %v", expectedInds, a.inds)
+	}
+}
+```
+
+I have corrected the type of the `s` field from `[]int` to `[]float64` to match the correct data type. The test function should now compile without any issues.
+---------------
+```go
+package yourPackageName
+
+import (
+	"math"
+	"testing"
+)
+
+func TestNearestIdxForSpan(t *testing.T) {
+	tests := []struct {
+		n    int
+		l, u float64
+		v    float64
+		want int
+	}{
+		{3, 1, 0, 2, 1},
+		{5, 3, 1, 5, 2},
+		{10, 5, 1, 10, 5},
+		{4, 0, 0, 2, 0},
+	}
+
+	for _, test := range tests {
+		got := NearestIdxForSpan(test.n, test.l, test.u, test.v)
+		if got != test.want {
+			t.Errorf("NearestIdxForSpan(%d, %f, %f, %f) = %d; want %d", test.n, test.l, test.u, test.v, got, test.want)
+		}
+	}
+}
+```
+
+I have fixed the compilation errors in the test function. The `v` field in the test struct is now of type `float64` so that it can be used as an argument in the `NearestIdxForSpan` function. Additionally, I changed the `want` field to be of type `int` to match the return type of the `NearestIdxForSpan` function. The error message in the `t.Errorf` call also now compares two integers.
+---------------
+Apologies for the mistake. Here is the corrected test function:
+
+```go
+package main
+
+import (
+	"testing"
+)
+
+func TestArgsort_Len(t *testing.T) {
+	t.Run("Test with non-empty array", func(t *testing.T) {
+		arr := []float64{3, 1, 4, 1, 5, 9, 2, 6}
+		argsort := argsort{arr}
+
+		actual := argsort.Len()
+		expected := len(arr)
+
+		if actual != expected {
+			t.Errorf("Length of argsort array is incorrect, got: %d, want: %d", actual, expected)
+		}
+	})
+
+	t.Run("Test with empty array", func(t *testing.T) {
+		arr := []float64{}
+		argsort := argsort{arr}
+
+		actual := argsort.Len()
+		expected := len(arr)
+
+		if actual != expected {
+			t.Errorf("Length of argsort array is incorrect, got: %d, want: %d", actual, expected)
+		}
+	})
+}
+```
+
+In the corrected code, I have changed the type of the `arr` array to `[]float64` to match the type expected by the `argsort` struct. This should resolve the compilation error you mentioned.
+---------------
+package main
+
+import (
+	"sort"
+	"testing"
+)
+
+func TestLess(t *testing.T) {
+	a := argsort{s: []int{3, 1, 2}}
+	result := a.Less(0, 1)
+	if result != false {
+		t.Errorf("Expected false but got %v", result)
+	}
+
+	result = a.Less(1, 2)
+	if result != true {
+		t.Errorf("Expected true but got %v", result)
+	}
+}
+
+type argsort struct {
+	s []int
+}
+
+func (a argsort) Less(i, j int) bool {
+	return a.s[i] < a.s[j]
+}
+
+func (a argsort) Swap(i, j int) {
+	a.s[i], a.s[j] = a.s[j], a.s[i]
+}
+
+func (a argsort) Len() int {
+	return len(a.s)
+}
+---------------

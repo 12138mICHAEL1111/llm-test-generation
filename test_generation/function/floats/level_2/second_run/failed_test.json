@@ -1,0 +1,12 @@
+{
+    "TestEqualApprox":"Code assert.False(t, EqualApprox(slice3, slice4, tolerance)) and assert.False(t, EqualApprox(slice5, slice6, tolerance)) fails. Should be false",
+    "TestMinIdx":"Test case NaN_values fails. Failing rason:MinIdx([NaN NaN 5 2 4]) = 3, want 2",
+    "TestNearestIdxForSpan":"Failing reason NearestIdxForSpan(3, 1.000000, 0.000000, 2.000000) = 0; want 1, NearestIdxForSpan(5, 3.000000, 1.000000, 5.000000) = 0; want 2, NearestIdxForSpan(10, 5.000000, 1.000000, 10.000000) = 0; want 5, NearestIdxForSpan(4, 0.000000, 2.000000, 2.000000) = 3; want 1",
+    "TestDistance":" Distance([1 2 3], [4 5 6], 3) = 4.326748710922225; want 3.301927",
+    "TestSubTo":" SubTo did not panic for unequal lengths",
+    "TestDot":"Test case Same_length_slices fails,  The code did not panic",
+    "TestLogSumExp":" Test case 2 fails,  Expected 1.3132616875182228, but got 1.4076059644443804",
+    "TestAddScaledTo": " AddScaledTo([18 21 24], [4 5 6], 2, [7 8 9])=[18 21 24]; want [15 18 21]",
+    "TestLogSpan": " LogSpan() = [1 10.000000000000002 100.00000000000004 1000.0000000000007 10000.00000000001], want [1 10 100 1000 10000]",
+    "TestWithin":" Expected index 2, but got 1 for value 4.000000 in slice [1 3 5 7 9]"
+}

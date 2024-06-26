@@ -1,0 +1,15 @@
+{
+    "TestAddScaledTo":"AddScaledTo([18 21 24], [4 5 6], 2, [7 8 9])=[18 21 24]; want [15 18 21]",
+    "TestDistance":"Distance([1 2 3], [4 5 6], 2) = 5.196152422706632; want 5.196152",
+    "TestDot":"Test case Same_length_slices fails.  The code did not panic",
+    "TestEqualApprox":" assert.False(t, EqualApprox(slice3, slice4, tolerance)) should be false",
+    "TestLogSpan":"LogSpan() = [1 3.1622776601683795 10.000000000000002 31.622776601683803 100.00000000000004], want [1 10 100 1000 10000]",
+    "TestLogSumExp":"Expected 1.3132616875182228, but got 1.4076059644443804",
+    "TestMinIdx": "Test case TestMinIdx fails. Failing reason panic: floats: zero length slice",
+    "TestMul": "expected a panic, but got none",
+    "TestNearestIdx":"Test_case_3 fails.  Expected: 3, Got: 2",
+    "TestNearestIdxForSpan":"Case1: NearestIdxForSpan(3, 1.000000, 0.000000, 2.000000) = 0; want 1, Case2: NearestIdxForSpan(5, 3.000000, 1.000000, 5.000000) = 0; want 2, Case3: NearestIdxForSpan(10, 5.000000, 1.000000, 10.000000) = 0; want 5",
+    "TestNorm":"Test case L2_norm fails.  Expected norm value: 3.7416573867739413, but got: 3.741657386773941",
+    "TestSubTo": "SubTo did not panic for unequal lengths",
+    "TestWithin": "Test case value_within_the_provided_slice fails.  Expected index 2, but got 1 for value 4.000000 in slice [1 3 5 7 9]"
+}

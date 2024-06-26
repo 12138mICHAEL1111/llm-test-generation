@@ -1,0 +1,93 @@
+(base) maike@MichaelDeMac llm-test-generation % go run .
+45
+0
+[TestAdd]
+1
+[TestAddTo]
+2
+[TestAddConst]
+3
+[TestAddScaled floatSlicesEqual]
+4
+[TestAddScaledTo]
+5
+[TestArgsort_Len]
+6
+[TestLess]
+7
+[TestArgsort_Swap]
+8
+[TestArgsort]
+9
+[TestArgsortStable]
+10
+[TestCount]
+11
+[TestCumProd]
+12
+[TestCumSum]
+13
+[TestDistance]
+14
+[TestDiv floatSlicesAreEqual]
+15
+[TestDivTo]
+16
+[TestDot]
+17
+[TestEqual]
+18
+[TestEqualApprox]
+19
+[TestEqualFunc]
+20
+[TestEqualLengths]
+21
+[TestFind]
+22
+[TestHasNaN]
+23
+[TestLogSpan]
+24
+[TestLogSumExp floatEquals TestLogSumExpEmptySlice]
+25
+[TestMax]
+26
+[TestMaxIdx TestMaxIdxPanic]
+27
+[TestMin TestMinEmptySlice]
+28
+[TestMinIdx]
+29
+[TestMul float64SlicesAreEqual]
+30
+[TestMulTo]
+31
+[TestNearestIdx]
+32
+[TestNearestIdxForSpan]
+33
+[TestNorm]
+34
+[TestProd]
+35
+[TestReverse]
+36
+[TestSame]
+37
+[TestScale]
+38
+[TestScaleTo]
+39
+[TestSpan]
+40
+[TestSub]
+41
+[TestSubTo]
+42
+[TestSum]
+43
+[TestWithin]
+44
+[TestSumCompensated almostEqual]
+(base) maike@MichaelDeMac llm-test-generation % 
