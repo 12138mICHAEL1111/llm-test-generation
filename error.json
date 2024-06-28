@@ -1,0 +1,13 @@
+{
+    "TestNearestIdx": "Test case empty_slice fails, panic: floats: zero length slice",
+    "TestEqual": "Test case TestEqualArrays fails, Not equal: Expected: true, Actual: false. Test case TestNotEqualArrays fails, Not equal: Expected: true, Actual: false. Test case TestEqualArrays fails, panic: 111",
+    "TestEqualApprox": "Test case TestEqualArrays fails, Not equal: Expected: true, Actual: false. Test case TestNotEqualArrays fails, Not equal: Expected: true, Actual: false. Test case TestEqualArrays fails, panic: 111",
+    "TestMax": "Panic occurred: floats: zero length slice.",
+    "TestSum": "Test case Test_case_3 fails, Expected 0.1, got 0",
+    "TestSumCompensated": "Test case Test_case_3 fails, Expected 0.1, got 0",
+    "TestCumProd": "Test case Arrays_with_different_lengths fails, Expected 0.000000 at index 3, but got 24.000000",
+    "TestSpan": "For input dst=[NaN NaN NaN 10], l=NaN, u=10, expected [NaN NaN NaN 10] but got [NaN NaN NaN 10]. For input dst=[+Inf +Inf +Inf +Inf +Inf 10], l=+Inf, u=10, expected [+Inf +Inf +Inf 10 +Inf +Inf] but got [+Inf +Inf +Inf +Inf +Inf 10].",
+    "TestDiv": "Test case Test_Case_3 fails, Div() did not panic as expected. want = []",
+    "TestMaxIdx": "Panic occurred: floats: zero length slice.",
+    "TestWithin": "For {[1 2 3 4 5] 5 4}, expected 4, but got -1. Recovered from panic: floats: slice length less than 2."
+}

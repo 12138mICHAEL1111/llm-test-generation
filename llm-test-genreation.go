@@ -12,6 +12,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -133,7 +134,7 @@ func extractCodeByRegex(completion string) string {
 	}
 }
 
-func extractFuntionName(str string) []string {
+func extractTestFuntionName(str string) []string {
 	var functionNames []string
 
 	re := regexp.MustCompile(`func (\w+)`)
@@ -144,58 +145,117 @@ func extractFuntionName(str string) []string {
 	return functionNames
 }
 
-func generateTest(client *openai.Client, sourceCodeList []string, basePrompt string, generatedTestFile string, historyFile string) {
-	total := len(sourceCodeList)
-	fmt.Println(total)
-	if _, err := os.Stat(generatedTestFile); err == nil {
-		err := os.Remove(generatedTestFile)
-		if err != nil {
-			panic(err)
-		}
+func extractSourceFuntionName(filename string) ([]string, error) {
+	fset := token.NewFileSet() // positions are relative to fset
+
+	// 解析文件
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
 	}
 
-	file, err := os.Create(generatedTestFile)
+	var funcNames []string
+	// 使用 Walk 来遍历所有的节点
+	ast.Inspect(node, func(n ast.Node) bool {
+		// 找到函数声明节点
+		if fn, ok := n.(*ast.FuncDecl); ok {
+			if fn.Recv != nil && len(fn.Recv.List) > 0 {
+				// 获取接收者的类型
+				var recvName string
+				if star, ok := fn.Recv.List[0].Type.(*ast.StarExpr); ok {
+					// 指针接收者
+					recvName = fmt.Sprintf("*%s", star.X.(*ast.Ident).Name)
+				} else {
+					// 非指针接收者
+					recvName = fmt.Sprintf("%s", fn.Recv.List[0].Type.(*ast.Ident).Name)
+				}
+				// 组合接收者和函数名
+				funcNames = append(funcNames, fmt.Sprintf("%s.%s", recvName, fn.Name.Name))
+			} else {
+				// 没有接收者，直接添加函数名
+				funcNames = append(funcNames, fn.Name.Name)
+			}
+		}
+		return true // 继续遍历
+	})
 
+	return funcNames, nil
+}
+
+func generateTest(client *openai.Client, sourceCodeList []string, basePrompt string, generatedTestFile string, historyFile string, workers int, funcNamesFile string) {
+	total := len(sourceCodeList)
+	file, err := os.Create(generatedTestFile)
 	if err != nil {
 		panic(err)
 	}
-
-	histories := []ChatHistory{}
-
 	defer file.Close()
 
-	for k, sourceCode := range sourceCodeList {
-		fmt.Println(k)
-		prompt := basePrompt + "\n" + sourceCode
-		completion := chat(client, prompt, nil)
-		history := []openai.ChatCompletionMessage{}
-		history = append(history, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleUser,
-			Content: prompt,
-		}, openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleAssistant,
-			Content: completion,
-		})
-		functionList := extractFuntionName(completion)
-		fmt.Println(functionList)
-		chatH := ChatHistory{
-			FunctionNames: functionList,
-			History:       history,
-		}
-		histories = append(histories, chatH)
+	var mutex sync.Mutex
+	wg := sync.WaitGroup{}
+	chunks := total / workers
 
-		testFunctionStr := extractTestFunction(completion)
-
-		_, err = file.WriteString(fmt.Sprintf("%s\n\n", testFunctionStr))
-		if err != nil {
-			panic(err)
+	var allHistories []ChatHistory
+	var funcNames [][]string
+	for i := 0; i < workers; i++ {
+		start := i * chunks
+		end := start + chunks
+		if i == workers-1 {
+			end = total
 		}
+
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			histories := []ChatHistory{}
+
+			for k := start; k < end; k++ {
+				prompt := basePrompt + "\n" + sourceCodeList[k]
+				completion := chat(client, prompt, nil)
+
+				history := []openai.ChatCompletionMessage{
+					{
+						Role:    openai.ChatMessageRoleUser,
+						Content: prompt,
+					},
+					{
+						Role:    openai.ChatMessageRoleAssistant,
+						Content: completion,
+					},
+				}
+
+				functionList := extractTestFuntionName(completion)
+				chatH := ChatHistory{
+					FunctionNames: functionList,
+					History:       history,
+				}
+				histories = append(histories, chatH)
+
+				testFunctionStr := extractTestFunction(completion)
+
+				mutex.Lock()
+				funcNames = append(funcNames, functionList)
+				_, err = file.WriteString(fmt.Sprintf("%s\n\n", testFunctionStr))
+				mutex.Unlock()
+				if err != nil {
+					panic(err)
+				}
+			}
+			mutex.Lock()
+			allHistories = append(allHistories, histories...)
+			mutex.Unlock()
+		}(start, end)
 	}
 
-	err = saveSliceToFile(histories, historyFile)
+	wg.Wait() // 等待所有goroutine完成
+	fmt.Println("All goroutines completed.")
+
+	// 保存所有历史记录到文件
+	err = saveSliceToFile(allHistories, historyFile)
 	if err != nil {
 		panic(err)
 	}
+
+	saveFuncNamesToFile(funcNamesFile, funcNames)
 }
 
 func extractTestFunction(completion string) string {
@@ -222,63 +282,80 @@ func extractTestFunction(completion string) string {
 	return testFunctionStr
 }
 
-func repair(client *openai.Client, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string) {
+func repair(client *openai.Client, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string, workers int, funcNamesFile string) {
 	histories, err := loadSliceFromFile(historyFile)
 	if err != nil {
 		panic(err)
 	}
+	errors := parseJsonFile(errorFile)
 
-	errors := parseCompliationJsonFile(errorFile)
-
-	fmt.Println(len(errors))
-	time := 0
+	var mutex sync.Mutex
+	wg := sync.WaitGroup{}
+	sem := make(chan struct{}, workers)
 
 	file, err := os.Create(saveCompletionFile)
 
 	if err != nil {
 		panic(err)
 	}
-	for targetName, cError := range errors {
-		fmt.Println(time)
-		time++
-		prompt := baseprompt + cError
-		for k, chatHistory := range histories {
-			functionNames := chatHistory.FunctionNames
-			flag := false
-			for _, functionName := range functionNames {
-				if functionName == targetName {
-					flag = true
+
+	for targetName, errorMsg := range errors {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(targetName, errorMsg string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			prompt := baseprompt + errorMsg
+
+			for k, chatHistory := range histories {
+				functionNames := chatHistory.FunctionNames
+				flag := false
+				for _, functionName := range functionNames {
+					if functionName == targetName {
+						flag = true
+					}
 				}
-			}
-			if flag {
-				histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
-					Role:    openai.ChatMessageRoleUser,
-					Content: prompt,
-				})
-				completion := chat(client, "", histories[k].History)
-				histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
-					Role:    openai.ChatMessageRoleAssistant,
-					Content: completion,
-				})
-
-				extractedFunctions := extractTestFunction(completion)
-				_, err := file.WriteString(extractedFunctions + "\n")
-
-				if err != nil {
-					panic(err)
+				mutex.Lock()
+				if flag {
+					histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
+						Role:    openai.ChatMessageRoleUser,
+						Content: prompt,
+					})
+					completion := chat(client, "", histories[k].History)
+					histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
+						Role:    openai.ChatMessageRoleAssistant,
+						Content: completion,
+					})
 				}
-
+				mutex.Unlock()
 			}
-		}
-
+		}(targetName, errorMsg)
+		wg.Add(1)
 	}
+
+	wg.Wait()
+	fmt.Println("All goroutines completed.")
+
 	err = saveSliceToFile(histories, saveHistroyFile)
 	if err != nil {
 		panic(err)
 	}
+
+	for _, history := range(histories){
+		chatMsgs := history.History
+		lastMsg := chatMsgs[len(chatMsgs)-1]
+		history.FunctionNames = extractTestFuntionName(lastMsg.Content)
+		extractedFunctions := extractTestFunction(lastMsg.Content)
+		
+		_, err := file.WriteString(extractedFunctions + "\n")
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
-func parseCompliationJsonFile(filename string) map[string]string {
+func parseJsonFile(filename string) map[string]string {
 	file, err := os.Open(filename)
 	if err != nil {
 		panic(err)
@@ -433,4 +510,13 @@ func loadSliceFromFile(filename string) ([]ChatHistory, error) {
 	}
 
 	return slice, nil
+}
+
+func saveFuncNamesToFile(filename string, funcNames [][]string) {
+	file, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
 }

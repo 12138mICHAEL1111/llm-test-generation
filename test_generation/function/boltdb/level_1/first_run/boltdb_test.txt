@@ -1,0 +1,880 @@
+func TestClose(t *testing.T) {
+	db := bolt.NewDB()
+	err := db.Close()
+
+	if err != nil {
+		t.Errorf("Error closing the DB: %v", err)
+	}
+
+	// Additional test cases can be added here to cover more scenarios
+}
+
+func TestBatch(t *testing.T) {
+	// Create a new DB instance
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %s", err)
+	}
+	defer db.Close()
+
+	// Define a function to be executed in the batch transaction
+	fn := func(tx *bolt.Tx) error {
+		// Add your data modification logic here
+		return nil
+	}
+
+	// Run the Batch function and check for any errors
+	err = db.Batch(fn)
+	if err != nil {
+		t.Fatalf("error running batch transaction: %s", err)
+	}
+}
+
+func TestPath(t *testing.T) {
+	// Initialize a new DB
+	db, err := bolt.Open("test_db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %s", err)
+	}
+	defer db.Close()
+
+	expectedPath := "test_db" // Specify the expected path
+
+	// Call the Path method
+	actualPath := db.Path()
+
+	// Check if the actual path matches the expected path
+	if actualPath != expectedPath {
+		t.Errorf("Path() returned %s, expected %s", actualPath, expectedPath)
+	}
+}
+
+func TestDBPage(t *testing.T) {
+	db := bolt.DB{} // Create a DB instance for testing
+	pageID := pgid(0) // Change the pageID as needed for testing
+
+	// Call the page function from the bolt package
+	// Assumes that the DB's pageSize and data are properly initialized
+	page := db.page(pageID)
+
+	// Add your tests here to verify the correctness of the page function
+	// For example, you can check if the returned page is not nil or other properties of the page
+
+	// Example test assertion
+	if page == nil {
+		t.Errorf("Expected non-nil page, got nil")
+	}
+}
+
+func TestBatchTrigger(t *testing.T) {
+	b := &bolt.Batch{}
+
+	b.Trigger()
+	// Add assertions here to verify the behavior of the trigger function
+}
+
+func TestClose(t *testing.T) {
+	// Initialize DB
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %s", err)
+	}
+	defer db.Close()
+
+	// Test closing a open DB
+	err = db.close()
+	if err != nil {
+		t.Errorf("Error closing database: %s", err)
+	}
+
+	// Test closing already closed DB
+	err = db.close()
+	if err != nil {
+		t.Errorf("Error closing already closed database: %s", err)
+	}
+
+	// Additional test cases can be added as needed
+}
+
+func TestGoString(t *testing.T) {
+	db := &bolt.DB{path: "test.db"}
+
+	expected := "bolt.DB{path:\"test.db\"}"
+	result := db.GoString()
+
+	if result != expected {
+		t.Errorf("Expected: %s, but got: %s", expected, result)
+	}
+}
+
+func TestMetaValidate(t *testing.T) {
+	type testCase struct {
+		m       bolt.Meta
+		expErr  error
+		message string
+	}
+
+	testCases := []testCase{
+		{
+			m: bolt.Meta{
+				magic:    bolt.Magic,
+				version:  bolt.Version,
+				checksum: 0,
+			},
+			expErr:  nil,
+			message: "Valid meta data",
+		},
+		{
+			m: bolt.Meta{
+				magic:    1234, // invalid magic number
+				version:  bolt.Version,
+				checksum: 0,
+			},
+			expErr:  bolt.ErrInvalid,
+			message: "Invalid magic number",
+		},
+		{
+			m: bolt.Meta{
+				magic:    bolt.Magic,
+				version:  999, // version mismatch
+				checksum: 0,
+			},
+			expErr:  bolt.ErrVersionMismatch,
+			message: "Version mismatch",
+		},
+		{
+			m: bolt.Meta{
+				magic:    bolt.Magic,
+				version:  bolt.Version,
+				checksum: 123, // invalid checksum
+			},
+			expErr:  bolt.ErrChecksum,
+			message: "Invalid checksum",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.message, func(t *testing.T) {
+			err := tc.m.Validate()
+			if err != tc.expErr {
+				t.Errorf("Expected error: %v, Got: %v", tc.expErr, err)
+			}
+		})
+	}
+}
+
+func TestPageInBuffer(t *testing.T) {
+	// Create a new DB instance
+	db := bolt.NewDB()
+
+	// Create a slice of bytes
+	b := make([]byte, 4096)
+
+	// Calculate the page id
+	id := pgid(5)
+
+	// Call the function to be tested
+	result := db.pageInBuffer(b, id)
+
+	// Ensure that the result is not nil
+	if result == nil {
+		t.Errorf("Expected non-nil result, got nil")
+	}
+}
+
+func TestBatchRun(t *testing.T) {
+	b := &bolt.Batch{}
+	db := &bolt.DB{}
+	b.db = db
+
+	c1 := &call{fn: func(tx *bolt.Tx) error {
+		return nil
+	}, err: make(chan error)}
+
+	c2 := &call{fn: func(tx *bolt.Tx) error {
+		return nil
+	}, err: make(chan error)}
+
+	b.calls = append(b.calls, c1)
+	b.calls = append(b.calls, c2)
+
+	go b.run()
+
+	for i := range b.calls {
+		err := <-b.calls[i].err
+		if err != nil {
+			t.Errorf("Expected nil error, got %v", err)
+		}
+	}
+}
+
+func TestString(t *testing.T) {
+	db := &bolt.DB{path: "/path/to/db"}
+	expected := "DB<\"/path/to/db\">"
+	result := db.String()
+
+	if result != expected {
+		t.Errorf("Expected %s, but got %s", expected, result)
+	}
+}
+
+func TestBegin(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin(true)
+	if err != nil {
+		t.Fatalf("failed to begin read-write transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	if tx.Writable() == false {
+		t.Errorf("expected transaction to be writable")
+	}
+
+	tx2, err := db.Begin(false)
+	if err != nil {
+		t.Fatalf("failed to begin read-only transaction: %v", err)
+	}
+	defer tx2.Rollback()
+
+	if tx2.Writable() == true {
+		t.Errorf("expected transaction to be read-only")
+	}
+}
+
+func TestCopyMeta(t *testing.T) {
+	m := &bolt.Meta{
+		ID:      1,
+		Version: 2,
+	}
+	dest := &bolt.Meta{}
+	m.Copy(dest)
+
+	if dest.ID != m.ID {
+		t.Errorf("expected dest.ID to be %d, but got %d", m.ID, dest.ID)
+	}
+
+	if dest.Version != m.Version {
+		t.Errorf("expected dest.Version to be %d, but got %d", m.Version, dest.Version)
+	}
+}
+
+func TestMeta(t *testing.T) {
+	db := bolt.Open("test.db", 0600, nil)
+	defer db.Close()
+
+	// Add test data and validate meta pages
+	db.Update(func(tx *bolt.Tx) error {
+		// Add test data to meta pages
+		meta0 := &bolt.meta{
+			txid: 100,
+			// Add more meta data fields here for testing purposes
+		}
+		meta1 := &bolt.meta{
+			txid: 200,
+			// Add more meta data fields here for testing purposes
+		}
+
+		db.meta0 = meta0
+		db.meta1 = meta1
+
+		// Call the meta function being tested
+		result := db.meta()
+
+		// Add assertions here to validate the result based on the test data
+		// For example:
+		if result != meta1 {
+			t.Errorf("Expected meta1, got %v", result)
+		}
+		return nil
+	})
+}
+
+func TestPanicError(t *testing.T) {
+	testCases := []struct {
+		reason   interface{}
+		expected string
+	}{
+		{reason: fmt.Errorf("test error"), expected: "test error"},
+		{reason: "test reason", expected: "panic: test reason"},
+	}
+
+	for _, tc := range testCases {
+		p := bolt.panicked{reason: tc.reason}
+		actual := p.Error()
+		if actual != tc.expected {
+			t.Errorf("Expected %s, but got %s", tc.expected, actual)
+		}
+	}
+}
+
+func TestOpen(t *testing.T) {
+	path := "test.db"
+	mode := os.FileMode(0644)
+	options := &bolt.Options{}
+
+	db, err := bolt.Open(path, mode, options)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing database: %v", err)
+		}
+	}()
+
+	// Add test cases to verify the functionality of the Open function
+}
+
+func TestBeginTx(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Errorf("error opening database: %s", err)
+	}
+	defer db.Close()
+
+	tx, err := db.beginTx()
+	if err != nil {
+		t.Errorf("error beginning transaction: %s", err)
+	}
+
+	// Add more test cases as needed
+}
+
+func TestAllocate(t *testing.T) {
+	db := &bolt.DB{
+		pageSize: 4096,
+		pagePool: sync.Pool{},
+		freelist: bolt.NewFreelist(),
+		rwtx:     &bolt.Tx{meta: &bolt.meta{}},
+	}
+
+	count := 2
+	page, err := db.allocate(count)
+	if err != nil {
+		t.Errorf("Error allocating page: %v", err)
+	}
+
+	if page == nil {
+		t.Errorf("Received nil page")
+	}
+
+	if int(page.overflow) != count-1 {
+		t.Errorf("Expected overflow value %d, got %d", count-1, int(page.overflow))
+	}
+
+	// Add test cases for other scenarios as needed
+}
+
+func TestSafelyCall(t *testing.T) {
+	// Create a mock function that may panic
+	mockFn := func(tx *bolt.Tx) error {
+		panic("mock panic")
+	}
+
+	// Create a new transaction
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin(true)
+	if err != nil {
+		t.Fatalf("error beginning transaction: %v", err)
+	}
+
+	// Test the safelyCall function with the mock function
+	err = bolt.SafelyCall(mockFn, tx)
+	if err == nil {
+		t.Error("expected an error but got nil")
+	}
+
+	// Ensure the error is of type panicked
+	var p bolt.Panicked
+	if !errors.As(err, &p) {
+		t.Errorf("expected error of type bolt.Panicked but got %T", err)
+	}
+}
+
+
+
+func TestMeta_Write(t *testing.T) {
+	m := &bolt.meta{
+		root:     bolt.root{root: 0},
+		pgid:     10,
+		freelist: 5,
+		txid:     3,
+	}
+
+	p := &bolt.page{id: 0}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Unexpected panic: %v", r)
+		}
+	}()
+
+	m.write(p)
+
+	expectedID := bolt.pgid(1)
+	if p.id != expectedID {
+		t.Errorf("Expected page id to be %d, but got %d", expectedID, p.id)
+	}
+
+	expectedFlags := bolt.metaPageFlag
+	if p.flags != expectedFlags {
+		t.Errorf("Expected page flags to be %d, but got %d", expectedFlags, p.flags)
+	}
+}
+
+func TestMeta_Write_PanicRootAboveHighWaterMark(t *testing.T) {
+	m := &bolt.meta{
+		root:     bolt.root{root: 11},
+		pgid:     10,
+		freelist: 5,
+	}
+
+	p := &bolt.page{id: 0}
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("Expected panic but it did not occur")
+		} else {
+			expectedErrMsg := fmt.Sprintf("root bucket pgid (%d) above high water mark (%d)", m.root.root, m.pgid)
+			if r != expectedErrMsg {
+				t.Errorf("Expected panic with message %q, but got %q", expectedErrMsg, r)
+			}
+		}
+	}()
+
+	m.write(p)
+}
+
+func TestMeta_Write_PanicFreelistAboveHighWaterMark(t *testing.T) {
+	m := &bolt.meta{
+		root:     bolt.root{root: 0},
+		pgid:     10,
+		freelist: 15,
+	}
+
+	p := &bolt.page{id: 0}
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("Expected panic but it did not occur")
+		} else {
+			expectedErrMsg := fmt.Sprintf("freelist pgid (%d) above high water mark (%d)", m.freelist, m.pgid)
+			if r != expectedErrMsg {
+				t.Errorf("Expected panic with message %q, but got %q", expectedErrMsg, r)
+			}
+		}
+	}()
+
+	m.write(p)
+}
+
+func TestMmap(t *testing.T) {
+	// Open a temporary bolt database file for testing
+	tmpfile, err := os.CreateTemp("", "bolt_test.db")
+	if err != nil {
+		t.Fatalf("Failed to create temporary file: %s", err)
+	}
+	defer os.Remove(tmpfile.Name())
+	defer tmpfile.Close()
+
+	// Create a new bolt DB instance with the temporary file
+	db, err := bolt.Open(tmpfile.Name(), 0666, nil)
+	if err != nil {
+		t.Fatalf("Failed to open bolt database: %s", err)
+	}
+	defer db.Close()
+
+	// Test the mmap function
+	err = db.mmap(1024) // Assuming minimum size = 1024 for testing purposes
+	if err != nil {
+		t.Errorf("mmap function returned an error: %s", err)
+	}
+}
+
+func newTestDB() (*bolt.DB, func()) {
+	tmpfile, err := os.CreateTemp("", "bolt_test.db")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create temporary file: %s", err))
+	}
+
+	db, err := bolt.Open(tmpfile.Name(), 0666, nil)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to open bolt database: %s", err))
+	}
+
+	cleanup := func() {
+		db.Close()
+		os.Remove(tmpfile.Name())
+	}
+
+	return db, cleanup
+}
+
+func TestSync(t *testing.T) {
+    db, err := bolt.Open("my.db", 0644, nil)
+    if err != nil {
+        t.Fatalf("error opening database: %v", err)
+    }
+    defer db.Close()
+
+    err = db.Sync()
+    if err != nil {
+        t.Errorf("error syncing database: %v", err)
+    }
+}
+
+func TestGrow(t *testing.T) {
+	dbPath := "./test.db"
+	db, err := bolt.Open(dbPath, 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening bolt database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		// Call the grow function with a size larger than the current file size
+		expectedSize := int(db.filesz) + bolt.AllocSize + 100
+		err := db.grow(expectedSize)
+		if err != nil {
+			return err
+		}
+
+		// Verify that filesz has been updated correctly after grow
+		if db.filesz != expectedSize {
+			return fmt.Errorf("expected filesz to be %d, but got %d", expectedSize, db.filesz)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Errorf("error in test case: %v", err)
+	}
+
+	// Delete the test database file
+	err = os.Remove(dbPath)
+	if err != nil {
+		t.Errorf("error deleting test database file: %v", err)
+	}
+}
+
+func TestSum64(t *testing.T) {
+	m := &bolt.meta{
+		checksum: 12345,
+	}
+
+	expected := uint64(15239742678717131360)
+	result := m.sum64()
+
+	if result != expected {
+		t.Errorf("Expected %d, but got %d", expected, result)
+	}
+}
+
+func TestMunmap(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.munmap()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestStats(t *testing.T) {
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	expectedStats := bolt.Stats{}
+	// Add some expected values to expectedStats
+
+	actualStats := db.Stats()
+
+	if actualStats != expectedStats {
+		t.Errorf("Stats did not return expected stats. Got: %v, Want: %v", actualStats, expectedStats)
+	}
+}
+
+func TestRemoveTx(t *testing.T) {
+	db := bolt.NewDB() // Assuming this function is provided in the bolt package
+
+	// Create a sample transaction to be removed
+	tx := &bolt.Tx{} // Assuming this type is defined in the bolt package
+
+	// Add the sample transaction to the DB's list of transactions
+	db.AddTx(tx) // Assuming this function is provided in the bolt package
+
+	// Call the removeTx method to remove the transaction
+	db.RemoveTx(tx) // Assuming this function is provided in the bolt package
+
+	// Check if the transaction was successfully removed
+	found := false
+	for _, t := range db.GetTxs() { // Assuming this function is provided in the bolt package to get a list of transactions
+		if t == tx {
+			found = true
+		}
+	}
+
+	if found {
+		t.Errorf("Transaction was not removed successfully")
+	}
+}
+
+func Test_assert(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		}
+	}()
+
+	// Testing the assertion with a condition that will fail
+	condition := false
+	msg := "test assertion message"
+	v := []interface{}{"value1", "value2"}
+	bolt._assert(condition, msg, v...)
+}
+
+func TestIsReadOnly(t *testing.T) {
+	db, err := bolt.Open("mydb.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %s", err)
+	}
+	defer db.Close()
+
+	if db.IsReadOnly() != false {
+		t.Errorf("expected IsReadOnly to return false, got true")
+	}
+
+	// Set DB to read-only mode
+	db.(*bolt.DB).readOnly = true
+
+	if db.IsReadOnly() != true {
+		t.Errorf("expected IsReadOnly to return true, got false")
+	}
+}
+
+func TestInfo(t *testing.T) {
+	// create a new DB object
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %s", err)
+	}
+	defer db.Close()
+
+	// call the Info method
+	info := db.Info()
+
+	// check if the Info method returned a non-nil value
+	if info == nil {
+		t.Errorf("expected non-nil Info value, got nil")
+	}
+
+	// check if the pointer of the data field in the Info struct is non-zero
+	if info.Data == 0 {
+		t.Errorf("expected non-zero data pointer, got zero")
+	}
+
+	// check if the pageSize field in the Info struct is equal to the page size of the DB object
+	if info.PageSize != db.pageSize {
+		t.Errorf("expected PageSize to be %d, got %d", db.pageSize, info.PageSize)
+	}
+}
+
+func TestWarn(t *testing.T) {
+    var buf bytes.Buffer
+    old := os.Stderr
+    os.Stderr = &buf
+    defer func() {
+        os.Stderr = old
+    }()
+
+    bolt.Warn("test message")
+
+    expected := "test message\n"
+    actual := buf.String()
+    if actual != expected {
+        t.Errorf("Expected output %q, but got %q", expected, actual)
+    }
+}
+
+func TestMmapSize(t *testing.T) {
+	tests := []struct {
+		inputSize int
+		expected  int
+		expectErr bool
+	}{
+		{1024, 1024, false},
+		{50000, 65536, false},
+		{1200000000, 1342177280, false},
+		{2000000000, bolt.MaxMapSize, false},
+	}
+
+	db := &bolt.DB{} // Create a DB instance for testing
+
+	for _, test := range tests {
+		actual, err := db.MmapSize(test.inputSize)
+
+		if test.expectErr {
+			if err == nil {
+				t.Errorf("Expected error for input size %d, but got none", test.inputSize)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("Unexpected error for input size %d: %v", test.inputSize, err)
+			}
+
+			if actual != test.expected {
+				t.Errorf("Expected mmap size %d for input size %d, but got %d", test.expected, test.inputSize, actual)
+			}
+		}
+	}
+}
+
+
+
+func TestView(t *testing.T) {
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	fn := func(tx *bolt.Tx) error {
+		// your test logic here
+		return nil
+	}
+
+	err = db.View(fn)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestInit(t *testing.T) {
+	db := &bolt.DB{}
+	err := db.init()
+	if err != nil {
+		t.Errorf("Error initializing DB: %v", err)
+	}
+
+	// Add assertions here to test the initialization of the DB, if needed
+}
+
+func TestWarnf(t *testing.T) {
+  var buf bytes.Buffer
+  os.Stderr = &buf
+
+  // Call the warnf function
+  bolt.Warnf("This is a warning: %d %s", 42, "error")
+
+  // Check if the output matches the expected value
+  expected := "This is a warning: 42 error\n"
+  if buf.String() != expected {
+    t.Errorf("Unexpected warning message. Expected: %s, Got: %s", expected, buf.String())
+  }
+}
+
+func TestSub(t *testing.T) {
+	s := bolt.Stats{
+		FreePageN:     100,
+		PendingPageN:  50,
+		FreeAlloc:     200,
+		FreelistInuse: 300,
+		TxN:           10,
+		TxStats: bolt.TxStats{
+			PageReclaims: 5,
+			PageYields:   3,
+		},
+	}
+
+	other := &bolt.Stats{
+		FreePageN:     50,
+		PendingPageN:  30,
+		FreeAlloc:     100,
+		FreelistInuse: 150,
+		TxN:           5,
+		TxStats: bolt.TxStats{
+			PageReclaims: 2,
+			PageYields:   1,
+		},
+	}
+
+	expected := bolt.Stats{
+		FreePageN:     100,
+		PendingPageN:  50,
+		FreeAlloc:     200,
+		FreelistInuse: 300,
+		TxN:           5,
+		TxStats: bolt.TxStats{
+			PageReclaims: 3,
+			PageYields:   2,
+		},
+	}
+
+	result := s.Sub(other)
+
+	if result != expected {
+		t.Errorf("Sub was incorrect, got: %+v, want: %+v", result, expected)
+	}
+}
+
+func TestPrintStack(t *testing.T) {
+	// Redirect stderr to capture output
+	old := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	bolt.PrintStack()
+
+	// Reset stderr
+	w.Close()
+	capturedOutputBytes, _ := io.ReadAll(r)
+	capturedOutput := string(capturedOutputBytes)
+
+	expectedPrefix := "goroutine "
+	if !strings.HasPrefix(capturedOutput, expectedPrefix) {
+		t.Errorf("Expected stack trace to start with prefix '%s', got '%s'", expectedPrefix, capturedOutput)
+	}
+	
+	os.Stderr = old
+}
+
+func TestAdd(t *testing.T) {
+	s := bolt.Stats{
+		TxStats: bolt.TxStats{
+			// initialize TxStats fields if needed
+		},
+	}
+	other := &bolt.Stats{
+		TxStats: bolt.TxStats{
+			// initialize TxStats fields for other Stats object
+		},
+	}
+
+	s.add(other)
+
+	// Add assertions here to test if the add method worked correctly
+	// For example:
+	// if s.TxStats.<FieldName> != expectedValue {
+	//     t.Errorf("Expected %v, but got %v", expectedValue, s.TxStats.<FieldName>)
+	// }
+}
+

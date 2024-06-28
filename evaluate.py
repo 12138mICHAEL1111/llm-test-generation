@@ -1,17 +1,16 @@
-from compliation_error import error_msg
 
-def evaluate():
-    supportive_func = 0
-    test_func = 0
-    with open('test_generation/function/floats/level_3/first_run/floats_test.txt', 'r') as file:
-        for line in file:
-            if line.startswith("func"):
-                if line.startswith("func Test"):
-                    test_func+=1
-                else:
-                    supportive_func +=1
-    print("test function num: ", test_func)
-    print("supportive function num", supportive_func)
+# def evaluate():
+#     supportive_func = 0
+#     test_func = 0
+#     with open('test_generation/function/floats/level_3/first_run/floats_test.txt', 'r') as file:
+#         for line in file:
+#             if line.startswith("func"):
+#                 if line.startswith("func Test"):
+#                     test_func+=1
+#                 else:
+#                     supportive_func +=1
+#     print("test function num: ", test_func)
+#     print("supportive function num", supportive_func)
 
     # error_map = {}
     # for error in error_msg:
@@ -27,5 +26,5 @@ def evaluate():
     #     print(k,error_map[k])
     
         
-if __name__ == "__main__":
-    evaluate()
+# if __name__ == "__main__":
+#     evaluate()
