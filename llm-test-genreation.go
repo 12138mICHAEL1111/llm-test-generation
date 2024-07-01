@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"io"
 	"os"
@@ -22,18 +23,14 @@ type ChatHistory struct {
 	History       []openai.ChatCompletionMessage
 }
 
-// level 1 means with only source code
-func extractFunctionLevel_1(codeStr string, filename string) (error, []string) {
+func extractCodeInFunctionByStr(codeStr string) (error, []string) {
 	functionList := make([]string, 0)
 
 	fset := token.NewFileSet()
 	var node *ast.File
 	var err error
-	if codeStr != "" {
-		node, err = parser.ParseFile(fset, "", codeStr, parser.ParseComments)
-	} else {
-		node, err = parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	}
+
+	node, err = parser.ParseFile(fset, "", codeStr, parser.ParseComments)
 
 	if err != nil {
 		return err, nil
@@ -47,22 +44,58 @@ func extractFunctionLevel_1(codeStr string, filename string) (error, []string) {
 			funcStart := fset.Position(fn.Pos()).Offset
 			funcEnd := fset.Position(fn.End()).Offset
 
-			var content []byte
-			if codeStr != "" {
-				content = []byte(codeStr)
-			} else {
-				content, err = os.ReadFile(filename)
-				if err != nil {
-					panic(err)
-				}
-			}
+			content := []byte(codeStr)
 
 			functionList = append(functionList, strings.TrimSpace(string(content[funcStart:funcEnd])))
 		}
 		return true
 	})
 
-	return nil, functionList
+	return err, functionList
+}
+
+func removeCommentsInFunction(fn *ast.FuncDecl) {
+	// 重置函数的文档注释
+	fn.Doc = nil
+	// 遍历并修改所有节点，移除注释
+	ast.Inspect(fn, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.CommentGroup:
+			*x = ast.CommentGroup{} // 移除注释组
+		}
+		return true
+	})
+}
+
+func formatFunction(fn *ast.FuncDecl, fset *token.FileSet) string {
+	var sb strings.Builder
+	printer.Fprint(&sb, fset, fn) // 使用 printer 包来格式化 AST 节点
+	return sb.String()
+}
+
+
+// level 1 means with only source code with no comment
+func extractFunctionLevel_1(filename string) []string {
+	functionList := []string{}
+	fset := token.NewFileSet()
+	// 解析源文件
+	file, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		panic(err)
+	}
+
+	// 遍历 AST 中的每个节点
+	ast.Inspect(file, func(n ast.Node) bool {
+		// 检查节点是否为函数声明
+		if fn, ok := n.(*ast.FuncDecl); ok {
+			// 移除函数中的所有注释
+			removeCommentsInFunction(fn)
+			// 打印没有注释的函数
+			functionList = append(functionList, formatFunction(fn, fset))
+		}
+		return true 
+	})
+	return functionList
 }
 
 func extractFunctionLevel_2(filename string) []string {
@@ -125,19 +158,22 @@ func chat(client *openai.Client, prompt string, messages []openai.ChatCompletion
 }
 
 func extractCodeByRegex(completion string) string {
-	re := regexp.MustCompile("(?s)```go\n(.*?)\n```")
-	matches := re.FindStringSubmatch(completion)
-	if len(matches) > 1 {
-		return matches[1]
-	} else {
-		return ""
+	code := ""
+	re := regexp.MustCompile("(?s)```.*?\n(.*?)\n```")
+	matches := re.FindAllStringSubmatch(completion, -1)
+	for k, match := range matches {
+		code = code + match[1]
+		if k < len(matches)-1 {
+			code = code + "\n\n"
+		}
 	}
+	return code
 }
 
-func extractTestFuntionName(str string) []string {
+func extractFuntionName(str string) []string {
 	var functionNames []string
 
-	re := regexp.MustCompile(`func (\w+)`)
+	re := regexp.MustCompile(`func(?:\s+\(\s*\w+\s+\*?\w+\s*\))?\s+(\w+)`)
 	matches := re.FindAllStringSubmatch(str, -1)
 	for _, match := range matches {
 		functionNames = append(functionNames, match[1])
@@ -223,17 +259,17 @@ func generateTest(client *openai.Client, sourceCodeList []string, basePrompt str
 					},
 				}
 
-				functionList := extractTestFuntionName(completion)
+				testFunctionStr := extractedGeneratedCode(completion)
+
+				functionNameList := extractFuntionName(testFunctionStr)
 				chatH := ChatHistory{
-					FunctionNames: functionList,
+					FunctionNames: functionNameList,
 					History:       history,
 				}
 				histories = append(histories, chatH)
 
-				testFunctionStr := extractTestFunction(completion)
-
 				mutex.Lock()
-				funcNames = append(funcNames, functionList)
+				funcNames = append(funcNames, functionNameList)
 				_, err = file.WriteString(fmt.Sprintf("%s\n\n", testFunctionStr))
 				mutex.Unlock()
 				if err != nil {
@@ -248,7 +284,6 @@ func generateTest(client *openai.Client, sourceCodeList []string, basePrompt str
 
 	wg.Wait() // 等待所有goroutine完成
 	fmt.Println("All goroutines completed.")
-
 	// 保存所有历史记录到文件
 	err = saveSliceToFile(allHistories, historyFile)
 	if err != nil {
@@ -258,7 +293,7 @@ func generateTest(client *openai.Client, sourceCodeList []string, basePrompt str
 	saveFuncNamesToFile(funcNamesFile, funcNames)
 }
 
-func extractTestFunction(completion string) string {
+func extractedGeneratedCode(completion string) string {
 	generatedCode := completion
 	if strings.Contains(completion, "```") {
 		generatedCode = extractCodeByRegex(completion)
@@ -266,7 +301,7 @@ func extractTestFunction(completion string) string {
 
 	var testFunctionList []string
 	if strings.Contains(generatedCode, "package") {
-		err, extractedFunctionList := extractFunctionLevel_1(generatedCode, "")
+		err, extractedFunctionList := extractCodeInFunctionByStr(generatedCode)
 		if err != nil {
 			generatedCode = "///warning///\n" + completion
 			fmt.Println("failed to parse generated code")
@@ -282,12 +317,12 @@ func extractTestFunction(completion string) string {
 	return testFunctionStr
 }
 
-func repair(client *openai.Client, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string, workers int, funcNamesFile string) {
+func repairCompilation(client *openai.Client, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string, workers int, funcNamesFile string) {
 	histories, err := loadSliceFromFile(historyFile)
 	if err != nil {
 		panic(err)
 	}
-	errors := parseJsonFile(errorFile)
+	errors := integration(errorFile, funcNamesFile)
 
 	var mutex sync.Mutex
 	wg := sync.WaitGroup{}
@@ -302,6 +337,7 @@ func repair(client *openai.Client, historyFile string, errorFile string, saveHis
 	for targetName, errorMsg := range errors {
 		wg.Add(1)
 		sem <- struct{}{}
+		fmt.Println(targetName)
 		go func(targetName, errorMsg string) {
 			defer wg.Done()
 			defer func() { <-sem }()
@@ -316,22 +352,24 @@ func repair(client *openai.Client, historyFile string, errorFile string, saveHis
 						flag = true
 					}
 				}
-				mutex.Lock()
 				if flag {
+					mutex.Lock()
 					histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
 						Role:    openai.ChatMessageRoleUser,
 						Content: prompt,
 					})
+					mutex.Unlock()
 					completion := chat(client, "", histories[k].History)
+					mutex.Lock()
 					histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
 						Role:    openai.ChatMessageRoleAssistant,
 						Content: completion,
 					})
+					mutex.Unlock()
+
 				}
-				mutex.Unlock()
 			}
 		}(targetName, errorMsg)
-		wg.Add(1)
 	}
 
 	wg.Wait()
@@ -341,18 +379,25 @@ func repair(client *openai.Client, historyFile string, errorFile string, saveHis
 	if err != nil {
 		panic(err)
 	}
+	funcNamesList := [][]string{}
 
-	for _, history := range(histories){
+	for _, history := range histories {
 		chatMsgs := history.History
 		lastMsg := chatMsgs[len(chatMsgs)-1]
-		history.FunctionNames = extractTestFuntionName(lastMsg.Content)
-		extractedFunctions := extractTestFunction(lastMsg.Content)
-		
+		extractedFunctions := extractedGeneratedCode(lastMsg.Content)
+		funcNames := extractFuntionName(extractedFunctions)
+		history.FunctionNames = funcNames
+		funcNamesList = append(funcNamesList, funcNames)
 		_, err := file.WriteString(extractedFunctions + "\n")
 		if err != nil {
 			panic(err)
 		}
 	}
+	saveFuncNamesToFile(funcNamesFile, funcNamesList)
+}
+
+func repair_failing(){
+
 }
 
 func parseJsonFile(filename string) map[string]string {
@@ -512,11 +557,96 @@ func loadSliceFromFile(filename string) ([]ChatHistory, error) {
 	return slice, nil
 }
 
+type NamesStruct struct {
+	Names [][]string `json:"names"`
+}
+
 func saveFuncNamesToFile(filename string, funcNames [][]string) {
 	file, err := os.Create(filename)
 	if err != nil {
 		panic(err)
 	}
+
 	defer file.Close()
 
+	encoder := json.NewEncoder(file)
+	names := NamesStruct{
+		Names: funcNames,
+	}
+	err = encoder.Encode(names)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func integration(errorFilePath, funcNameFilePath string) map[string]string {
+	efile, err := os.Open(errorFilePath)
+	if err != nil {
+		panic(err)
+	}
+
+	defer efile.Close()
+
+	bytes, err := io.ReadAll(efile)
+	if err != nil {
+		panic(err)
+	}
+
+	errorJSON := map[string]string{}
+	if err := json.Unmarshal(bytes, &errorJSON); err != nil {
+		panic(err)
+	}
+
+	ffile, err := os.Open(funcNameFilePath)
+	if err != nil {
+		panic(err)
+	}
+	defer ffile.Close()
+
+	bytes, err = io.ReadAll(ffile)
+	if err != nil {
+		panic(err)
+	}
+
+	names := NamesStruct{}
+	if err := json.Unmarshal(bytes, &names); err != nil {
+		panic(err)
+	}
+
+	funcNeedFmt := make(map[string]bool)
+	keyToRemove := make([]string, 0)
+
+	for funcName, errMsg := range errorJSON {
+		for _, funcNameList := range names.Names {
+			if len(funcNameList) == 1 {
+				continue
+			}
+			for index, name := range funcNameList {
+				if name == funcName && index > 0 {
+					targetFuncName := funcNameList[0]
+					if _, exists := errorJSON[targetFuncName]; !exists {
+						errorJSON[targetFuncName] = fmt.Sprintf("%s: %s", funcName, errMsg)
+					} else {
+						funcNeedFmt[targetFuncName] = true
+						errorJSON[targetFuncName] += fmt.Sprintf("%s: %s", funcName, errMsg)
+					}
+					keyToRemove = append(keyToRemove, funcName)
+					break
+				}
+			}
+		}
+	}
+
+	for _, key := range keyToRemove {
+		delete(errorJSON, key)
+	}
+
+	for f := range funcNeedFmt {
+		errorJSON[f] = fmt.Sprintf("%s: %s", f, errorJSON[f])
+	}
+
+	for k := range errorJSON {
+		errorJSON[k] = errorJSON[k][:len(errorJSON[k])-1]
+	}
+	return errorJSON
 }

@@ -16,6 +16,7 @@ def extract_test_function_names(filepath):
     for match in matches:
         test_function_names.append(match)
 
+    print("Number of tests:", len(test_function_names))
     return test_function_names
 
 # assert fails
@@ -75,8 +76,6 @@ def collect_panic(result, error_json, test_function):
     matches = pattern.findall(result)
     for match in matches:
         test_name, error_message = match
-        # print("-----------")
-        # print(test_name,error_message)
         if not test_name:
             err_msg = err_msg + f"{error_message}. "
         else:
@@ -91,21 +90,29 @@ def collect_panic(result, error_json, test_function):
     else:
         error_json[test_function] = error_json[test_function] + err_msg
 
+def collect_timeout(result,err_json,test_function):
+    if "panic: test timed out" in result:
+        err_json[test_function] = result
+        return True
+    return False
 
 def collect_error(test_function_list,error_json,command):
     for test_function in tqdm(test_function_list):
         command[3] = "^" + test_function+ "$"
         result = subprocess.run(command, capture_output=True, text=True).stdout
-        print(result)
         if result[:2] == "ok":
             continue
 
         index = result.find("\n")
-        if index != -1:
-            result = result[index + 1 :]
-        else:
-            print("No newline character found in the text.")
-            
+        if index == -1:
+            continue
+        
+        r = collect_timeout(result[:index],error_json,test_function)
+        if r:
+            continue
+        
+        result = result[index + 1 :]
+        
         if "\tError Trace" in result:
             collect_assert(result, error_json, test_function)
         else:
@@ -114,27 +121,43 @@ def collect_error(test_function_list,error_json,command):
         collect_panic(result, error_json, test_function)
         msg = error_json[test_function]
         msg = f"For {test_function}: " + msg
-        # remove last white space
-        error_json[test_function] = msg[: len(msg) - 1]
+      
 
+def count_fixed(error_json):
+    try:
+        with open("error.json", 'r') as file:
+            old_error_json = json.load(file)
+    except:
+        return
+    
+    num_fixed = 0 
+    for old_error in old_error_json:
+        if old_error not in error_json:
+            print(old_error)
+            num_fixed += 1
+    
+    print("number fixed", num_fixed)
+    
 
 if __name__ == "__main__":
     error_json = {}
 
-    # test_function_list = extract_test_function_names("floats/floats_test.go")
-    test_function_list = ["TestAdd"]
+    test_function_list = extract_test_function_names("db_test.go")
+    # test_function_list = ["TestSleep"]
     command = [
         "go",
         "test",
         "-run",
         "^TestEqualApprox$",
-        "/Users/maike/Desktop/gonum/floats/floats_test.go",
-        "/Users/maike/Desktop/gonum/floats/floats.go",
+        "db_test.go",
+        "-timeout",
+        "10s"
     ]
 
     collect_error(test_function_list,error_json,command)
     
-    with open('failed_error.json', 'w') as json_file:
+    print("number of failing tests",len(error_json))
+    with open('error.json', 'w') as json_file:
         json.dump(error_json, json_file, indent=4)
         
 

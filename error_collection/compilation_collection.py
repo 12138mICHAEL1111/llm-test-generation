@@ -3,6 +3,18 @@ import json
 
 from tqdm import tqdm
 
+def count_func_num(filepath):
+    with open(filepath, 'r') as file:
+        content = file.read()
+    function_pattern = re.compile(r'^func(?:\s+\(\s*\w+\s+\*?\w+\s*\))?(\s+\w+)', re.MULTILINE)
+    matches = function_pattern.findall(content)
+    test_func_num = 0
+    for match in matches:
+        if "func Test" in match:
+            test_func_num +=1
+    print("Number of functions:", len(matches))
+    print("Test functions", test_func_num)
+    
 def find_nearest_function(filepath, line_number):
     # 读取文件内容
     with open(filepath, 'r') as file:
@@ -26,30 +38,46 @@ def get_line_from_file(filepath, line_number):
         lines = file.readlines()
     
     return lines[line_number - 1].strip()
-
+      
+def count_fixed(error_json):
+    try:
+        with open("error.json", 'r') as file:
+            old_error_json = json.load(file)
+    except:
+        return
+    
+    num_fixed = 0 
+    for old_error in old_error_json:
+        if old_error not in error_json:
+            print(old_error)
+            num_fixed += 1
+    
+    print("number fixed", num_fixed)
 
 if __name__ == "__main__":
     test_file_path = "db_test.go"
+    count_func_num(test_file_path)
     error_json = {}
     
     with open('ide_error.json', 'r') as file:
-        data = json.load(file)
-        
-    errors = data["errors"]
-    
+        errors = json.load(file)
+            
     for error in tqdm(errors):
         line = get_line_from_file(test_file_path, error["startLineNumber"])
-        targetFunction = find_nearest_function(test_file_path, error["startLineNumber"])
+        target_func = find_nearest_function(test_file_path, error["startLineNumber"])
         msg = error["message"]
-        if targetFunction not in error_json:
-            error_json[targetFunction] = f"For code {line}, {msg}. "
+        if target_func not in error_json:
+            error_json[target_func] = f"{target_func}: For code {line}, {msg}. "
         else:
-            error_json[targetFunction] = error_json[targetFunction] + f"For code {line}, {msg}. "
+            error_json[target_func] = error_json[target_func] + f"For code {line}, {msg}. "
 
-    for k in error_json:
-        error_json[k] = error_json[k][:len(error_json[k])-1]
-        
-    with open('compilation_error.json', 'w') as json_file:
+    print("number of error funcs:", len(error_json))
+    
+    count_fixed(error_json)
+    
+    with open('error.json', 'w') as json_file:
         json.dump(error_json, json_file, indent=4)
+        
+
         
 
