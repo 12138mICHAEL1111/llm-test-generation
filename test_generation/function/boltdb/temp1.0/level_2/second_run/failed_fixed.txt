@@ -1,0 +1,176 @@
+func TestClose(t *testing.T) {
+	dbPath := "test.db"
+	db, err := bolt.Open(dbPath, 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer os.Remove(dbPath)
+	defer db.Close()
+
+	err = db.Close()
+	if err != nil {
+		t.Errorf("Error closing database: %v", err)
+	}
+
+	// Try closing the database again
+	err = db.Close()
+	if err == nil {
+		t.Error("Expected error when closing already closed database")
+	} else if err.Error() != "database already closed" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+func TestStats(t *testing.T) {
+	// Create a new Bolt database for testing
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	// Get the initial stats before making any changes
+	initialStats := db.Stats()
+
+	// Modify the database (you can add your desired database operations here)
+	// For example, putting a key-value pair
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucket([]byte("test"))
+		if err != nil {
+			return err
+		}
+		err = bucket.Put([]byte("key"), []byte("value"))
+		return err
+	})
+	if err != nil {
+		t.Fatalf("error modifying database: %v", err)
+	}
+
+	// Get the updated stats after modifying the database
+	updatedStats := db.Stats()
+
+	// Check if the stats have been updated correctly
+	if initialStats.FreePageN == updatedStats.FreePageN {
+		t.Errorf("Free Page count did not change after modifying the database")
+	}
+}
+func TestIsReadOnly(t *testing.T) {
+	// Create a temporary file for the database
+	tmpfile, err := ioutil.TempFile("", "bolt_db")
+	if err != nil {
+		t.Fatalf("Error creating temporary file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name()) // Clean up the temporary file
+
+	// Close the temporary file to simulate opening it later
+	_ = tmpfile.Close()
+
+	// Create a new bolt.DB instance
+	db, err := bolt.Open(tmpfile.Name(), 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	// Check if IsReadOnly() returns false initially
+	readOnly := db.IsReadOnly()
+	if readOnly {
+		t.Errorf("IsReadOnly() should return false, got: %v", readOnly)
+	}
+
+	// Close the database and re-open it as read-only
+	_ = db.Close()
+	db, err = bolt.Open(tmpfile.Name(), 0400, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("Error opening database read-only: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	// Check if IsReadOnly() returns true after opening as read-only
+	readOnly = db.IsReadOnly()
+	if !readOnly {
+		t.Errorf("IsReadOnly() should return true, got: %v", readOnly)
+	}
+}
+func TestStats_Sub(t *testing.T) {
+	// Create Stats objects for testing
+	s1 := bolt.Stats{
+		FreePageN:     10,
+		PendingPageN:  20,
+		FreeAlloc:     30,
+		FreelistInuse: 40,
+		TxN:           50,
+		OpenTxN:       60,
+		TxStats: bolt.TxStats{
+			PageCount:     100,
+			PageAlloc:     200,
+			CursorCount:   300,
+			NodeCount:     400,
+			NodeDeref:     500,
+			Rebalance:     600,
+			RebalanceTime: time.Duration(1 * time.Second),
+			Split:         700,
+			Spill:         800,
+			SpillTime:     time.Duration(2 * time.Second),
+			Write:         900,
+			WriteTime:     time.Duration(3 * time.Second),
+		},
+	}
+
+	s2 := bolt.Stats{
+		FreePageN:     5,
+		PendingPageN:  10,
+		FreeAlloc:     15,
+		FreelistInuse: 20,
+		TxN:           25,
+		OpenTxN:       30,
+		TxStats: bolt.TxStats{
+			PageCount:     50,
+			PageAlloc:     100,
+			CursorCount:   150,
+			NodeCount:     200,
+			NodeDeref:     250,
+			Rebalance:     300,
+			RebalanceTime: time.Duration(500 * time.Millisecond),
+			Split:         350,
+			Spill:         400,
+			SpillTime:     time.Duration(1 * time.Second),
+			Write:         450,
+			WriteTime:     time.Duration(1500 * time.Millisecond),
+		},
+	}
+
+	// Perform the Sub operation
+	subStats := s1.Sub(&s2)
+
+	// Verify the result
+	expectedStats := bolt.Stats{
+		FreePageN:     5,
+		PendingPageN:  10,
+		FreeAlloc:     15,
+		FreelistInuse: 20,
+		TxN:           25, // Correcting the TxN subtraction
+		OpenTxN:       60,
+		TxStats: bolt.TxStats{
+			PageCount:     50,
+			PageAlloc:     100,
+			CursorCount:   150,
+			NodeCount:     200,
+			NodeDeref:     250,
+			Rebalance:     300,
+			RebalanceTime: time.Duration(500 * time.Millisecond),
+			Split:         350,
+			Spill:         400,
+			SpillTime:     time.Duration(1 * time.Second),
+			Write:         450,
+			WriteTime:     time.Duration(1500 * time.Millisecond),
+		},
+	}
+
+	if subStats != expectedStats {
+		t.Errorf("Sub operation did not produce the expected result. Got: %v, Expected: %v", subStats, expectedStats)
+	}
+}

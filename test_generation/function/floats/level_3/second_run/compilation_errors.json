@@ -1,4 +1,0 @@
-{
-    "TestDivTo": "For code t := []float64{0.5, 2.0, 3.0}, no new variables on left side of := and cannot use []float64{…} (value of type []float64) as *testing.T value in assignment. For code result := DivTo(dst, s, t), cannot use t (variable of type *testing.T) as []float64 value in argument to DivTo",
-    "TestCount":"For code t.Errorf(\"Count(%v, %v) = %v; want %v\", testFunc, tc.input, got, tc.want),(*testing.common).Errorf format %v arg testFunc is a func value, not called"
-}

@@ -1,0 +1,172 @@
+{
+    "Batch": [
+        "DB",
+        "Tx",
+        "error"
+    ],
+    "Begin": [
+        "DB",
+        "bool",
+        "Tx",
+        "error"
+    ],
+    "Close": [
+        "DB",
+        "error"
+    ],
+    "Error": [
+        "panicked",
+        "string"
+    ],
+    "GoString": [
+        "DB",
+        "string"
+    ],
+    "Info": [
+        "DB",
+        "Info"
+    ],
+    "IsReadOnly": [
+        "DB",
+        "bool"
+    ],
+    "Open": [
+        "string",
+        "os.FileMode",
+        "Options",
+        "DB",
+        "error"
+    ],
+    "Path": [
+        "DB",
+        "string"
+    ],
+    "Stats": [
+        "DB",
+        "Stats"
+    ],
+    "String": [
+        "DB",
+        "string"
+    ],
+    "Sub": [
+        "Stats"
+    ],
+    "Sync": [
+        "DB",
+        "error"
+    ],
+    "Update": [
+        "DB",
+        "Tx",
+        "error"
+    ],
+    "View": [
+        "DB",
+        "Tx",
+        "error"
+    ],
+    "_assert": [
+        "bool",
+        "string",
+        ""
+    ],
+    "add": [
+        "Stats"
+    ],
+    "allocate": [
+        "DB",
+        "int",
+        "page",
+        "error"
+    ],
+    "beginRWTx": [
+        "DB",
+        "Tx",
+        "error"
+    ],
+    "beginTx": [
+        "DB",
+        "Tx",
+        "error"
+    ],
+    "close": [
+        "DB",
+        "error"
+    ],
+    "copy": [
+        "meta"
+    ],
+    "grow": [
+        "DB",
+        "int",
+        "error"
+    ],
+    "init": [
+        "DB",
+        "error"
+    ],
+    "meta": [
+        "DB",
+        "meta"
+    ],
+    "mmap": [
+        "DB",
+        "int",
+        "error"
+    ],
+    "mmapSize": [
+        "DB",
+        "int",
+        "error"
+    ],
+    "munmap": [
+        "DB",
+        "error"
+    ],
+    "page": [
+        "DB",
+        "pgid",
+        "page"
+    ],
+    "pageInBuffer": [
+        "DB",
+        "byte",
+        "pgid",
+        "page"
+    ],
+    "printstack": [],
+    "removeTx": [
+        "DB",
+        "Tx"
+    ],
+    "run": [
+        "batch"
+    ],
+    "safelyCall": [
+        "Tx",
+        "error"
+    ],
+    "sum64": [
+        "meta",
+        "uint64"
+    ],
+    "trigger": [
+        "batch"
+    ],
+    "validate": [
+        "meta",
+        "error"
+    ],
+    "warn": [
+        ""
+    ],
+    "warnf": [
+        "string",
+        ""
+    ],
+    "write": [
+        "meta",
+        "page"
+    ]
+}

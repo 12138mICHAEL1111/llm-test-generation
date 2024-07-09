@@ -1,0 +1,56 @@
+func TestStats(t *testing.T) {
+	dbPath := "/tmp/test.db"
+	db, err := bolt.Open(dbPath, 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer func() {
+		db.Close()
+		os.Remove(dbPath)
+	}()
+
+	stats := db.Stats() // Fix for stats declared and not used error
+
+	// Add test cases to validate the Stats function output
+	// For example:
+	// if stats.FreePageN != expectedFreePageN {
+	//     t.Errorf("incorrect number of free pages, expected: %d, got: %d", expectedFreePageN, stats.FreePageN)
+	// }
+}
+func TestUpdate(t *testing.T) {
+	// Create a temporary file for the Bolt DB
+	file, err := os.CreateTemp("", "bolt.db")
+	if err != nil {
+		t.Fatalf("error creating temporary file: %v", err)
+	}
+	defer os.Remove(file.Name())
+
+	// Close the file and use the file name for database path
+	file.Close()
+
+	// Open the Bolt DB using the temporary file
+	db, err := bolt.Open(file.Name(), 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		// Perform some operations within the transaction
+		bucket, err := tx.CreateBucket([]byte("test"))
+		if err != nil {
+			return err
+		}
+
+		err = bucket.Put([]byte("key"), []byte("value"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Errorf("error updating database: %v", err)
+	}
+}

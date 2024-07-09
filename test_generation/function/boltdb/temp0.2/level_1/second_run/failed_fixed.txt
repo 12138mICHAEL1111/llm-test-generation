@@ -1,0 +1,33 @@
+func TestIsReadOnly(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	if db.IsReadOnly() {
+		t.Errorf("Expected database to not be read-only, but it is")
+	}
+
+	// Close the database and re-open it in read-only mode
+	db.Close()
+	db, err = bolt.Open("test.db", 0400, nil)
+	if err != nil {
+		t.Fatalf("Error opening database in read-only mode: %v", err)
+	}
+	defer db.Close()
+
+	if !db.IsReadOnly() {
+		t.Errorf("Expected database to be read-only, but it is not")
+	}
+
+	// Check if database is truly read-only at the file level
+	fileInfo, err := db.File.Stat()
+	if err != nil {
+		t.Fatalf("Error getting file info: %v", err)
+	}
+
+	if fileInfo.Mode().Perm() != 0400 {
+		t.Errorf("Expected file permission to be 0400 (read-only), but it is %v", fileInfo.Mode().Perm())
+	}
+}

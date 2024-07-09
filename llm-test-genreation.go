@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -14,11 +16,15 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"unicode"
+
+	boltpackageInfo "llm-test-generation/package_Info/boltdb"
 
 	openai "github.com/sashabaranov/go-openai"
 )
 
 type ChatHistory struct {
+	Duplicated    bool
 	FunctionNames []string
 	History       []openai.ChatCompletionMessage
 }
@@ -73,10 +79,9 @@ func formatFunction(fn *ast.FuncDecl, fset *token.FileSet) string {
 	return sb.String()
 }
 
-
 // level 1 means with only source code with no comment
-func extractFunctionLevel_1(filename string) []string {
-	functionList := []string{}
+func extractFunctionLevel_1(filename string, repo string) map[string]string {
+	functionList := map[string]string{}
 	fset := token.NewFileSet()
 	// 解析源文件
 	file, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
@@ -88,18 +93,39 @@ func extractFunctionLevel_1(filename string) []string {
 	ast.Inspect(file, func(n ast.Node) bool {
 		// 检查节点是否为函数声明
 		if fn, ok := n.(*ast.FuncDecl); ok {
+			if repo == "boltdb" {
+				if fn.Name.Name == "Error" {
+					return true
+				}
+				if !unicode.IsUpper(rune(fn.Name.Name[0])) {
+					return true
+				}
+			}
 			// 移除函数中的所有注释
 			removeCommentsInFunction(fn)
 			// 打印没有注释的函数
-			functionList = append(functionList, formatFunction(fn, fset))
+			funcStr := formatFunction(fn, fset)
+			basePrompt = strings.Replace(boltConfig.testGenerationBasePrompt, "{functionName}", fn.Name.Name, 1)
+			funcStr = basePrompt + funcStr
+			if repo == "boltdb" {
+				funcStr += addOpenAndCloseCode_1(fn.Name.Name)
+			}
+			functionList[fn.Name.Name] = funcStr
 		}
-		return true 
+		return true
 	})
 	return functionList
 }
 
-func extractFunctionLevel_2(filename string) []string {
-	functionList := make([]string, 0)
+func extractFunctionLevel_2(filename string, typeFile string, repo string) map[string]string {
+	functionList_1 := extractFunctionLevel_1(filename, repo)
+	file, err := os.Open(typeFile)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	functionList := map[string]string{}
 
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
@@ -108,11 +134,73 @@ func extractFunctionLevel_2(filename string) []string {
 		panic(err)
 	}
 
-	ast.Inspect(node, func(n ast.Node) bool {
+	var typeMap map[string][]string
 
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&typeMap); err != nil {
+		panic(err)
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
 		fn, ok := n.(*ast.FuncDecl)
 		if ok {
+			if _, ok := functionList_1[fn.Name.Name]; !ok {
+				return true
+			}
 
+			paramsTypeList := map[string]bool{}
+			funcStr := functionList_1[fn.Name.Name]
+			if paramsTypes, ok := typeMap[fn.Name.Name]; ok {
+				for _, paramsType := range paramsTypes {
+					funcStr += boltpackageInfo.StructMap_2[paramsType]
+					paramsTypeList[paramsType] = true
+				}
+			}
+
+			if repo == "boltdb" {
+				funcStr += addOpenAndCloseCode_2(paramsTypeList)
+			}
+			functionList[fn.Name.Name] = funcStr
+		}
+		return true
+	})
+	return functionList
+}
+
+func extractFunctionLevel_3(filename string, typeFile string, repo string) map[string]string {
+	file, err := os.Open(typeFile)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	functionList := map[string]string{}
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+
+	if err != nil {
+		panic(err)
+	}
+
+	var typeMap map[string][]string
+
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&typeMap); err != nil {
+		panic(err)
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		fn, ok := n.(*ast.FuncDecl)
+		if ok {
+			if repo == "boltdb" {
+				if fn.Name.Name == "Error" {
+					return true
+				}
+				if !unicode.IsUpper(rune(fn.Name.Name[0])) {
+					return true
+				}
+			}
 			funcStart := fset.Position(fn.Pos()).Offset
 			funcEnd := fset.Position(fn.End()).Offset
 			docString := fn.Doc.Text()
@@ -122,13 +210,59 @@ func extractFunctionLevel_2(filename string) []string {
 				panic(err)
 			}
 			funcCode := strings.TrimSpace(string(content[funcStart:funcEnd]))
-
 			funcStr := docString + funcCode
-			functionList = append(functionList, funcStr)
+			paramsTypeList := map[string]bool{}
+			if paramsTypes, ok := typeMap[fn.Name.Name]; ok {
+				for _, paramsType := range paramsTypes {
+					funcStr += boltpackageInfo.StructMap_3[paramsType]
+					paramsTypeList[paramsType] = true
+				}
+			}
+
+			if repo == "boltdb" {
+				funcStr += addOpenAndCloseCode_3(fn.Name.Name, paramsTypeList)
+			}
+			basePrompt = strings.Replace(boltConfig.testGenerationBasePrompt, "{functionName}", fn.Name.Name, 1)
+			funcStr = basePrompt + funcStr
+			functionList[fn.Name.Name] = funcStr
 		}
 		return true
 	})
 	return functionList
+}
+
+func addOpenAndCloseCode_1(name string) string {
+	if name == "Open" {
+		return boltpackageInfo.CloseCode_1
+	}
+
+	if name == "Close" {
+		return boltpackageInfo.OpenCode_1
+	}
+
+	return boltpackageInfo.OpenCode_1 + boltpackageInfo.CloseCode_1
+}
+
+func addOpenAndCloseCode_2(paramsTypeList map[string]bool) string {
+	str := ""
+	l := []string{"DB", "Options"}
+	for _, param := range l {
+		if _, ok := paramsTypeList[param]; !ok {
+			str += boltpackageInfo.StructMap_2[param]
+		}
+	}
+	return str
+}
+
+func addOpenAndCloseCode_3(name string, paramsTypeList map[string]bool) string {
+	str := addOpenAndCloseCode_1(name)
+	l := []string{"DB", "Options"}
+	for _, param := range l {
+		if _, ok := paramsTypeList[param]; !ok {
+			str += boltpackageInfo.StructMap_3[param]
+		}
+	}
+	return str
 }
 
 func chat(client *openai.Client, prompt string, messages []openai.ChatCompletionMessage) string {
@@ -149,6 +283,7 @@ func chat(client *openai.Client, prompt string, messages []openai.ChatCompletion
 		openai.ChatCompletionRequest{
 			Model:    openai.GPT3Dot5Turbo0125,
 			Messages: promptMessages,
+			Temperature: chatGPTemp,
 		},
 	)
 	if err != nil {
@@ -218,7 +353,7 @@ func extractSourceFuntionName(filename string) ([]string, error) {
 	return funcNames, nil
 }
 
-func generateTest(client *openai.Client, sourceCodeList []string, basePrompt string, generatedTestFile string, historyFile string, workers int, funcNamesFile string) {
+func generateTest(client *openai.Client, sourceCodeList []string, basePrompt string, generatedTestFile string, historyFile string, workers int) {
 	total := len(sourceCodeList)
 	file, err := os.Create(generatedTestFile)
 	if err != nil {
@@ -245,7 +380,7 @@ func generateTest(client *openai.Client, sourceCodeList []string, basePrompt str
 			histories := []ChatHistory{}
 
 			for k := start; k < end; k++ {
-				prompt := basePrompt + "\n" + sourceCodeList[k]
+				prompt := sourceCodeList[k]
 				completion := chat(client, prompt, nil)
 
 				history := []openai.ChatCompletionMessage{
@@ -290,7 +425,6 @@ func generateTest(client *openai.Client, sourceCodeList []string, basePrompt str
 		panic(err)
 	}
 
-	saveFuncNamesToFile(funcNamesFile, funcNames)
 }
 
 func extractedGeneratedCode(completion string) string {
@@ -317,12 +451,214 @@ func extractedGeneratedCode(completion string) string {
 	return testFunctionStr
 }
 
-func repairCompilation(client *openai.Client, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string, workers int, funcNamesFile string) {
+func removeFunction(testFile string, errors map[string]string) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, testFile, nil, parser.ParseComments)
+	if err != nil {
+		panic(err)
+	}
+
+	// 遍历 AST，删除指定的函数
+	ast.Inspect(node, func(n ast.Node) bool {
+		fn, ok := n.(*ast.FuncDecl)
+		if !ok {
+			return true
+		}
+		if _, found := errors[fn.Name.Name]; found {
+			for i, d := range node.Decls {
+				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == fn.Name.Name {
+					node.Decls = append(node.Decls[:i], node.Decls[i+1:]...)
+					return false
+				}
+			}
+		}
+		return true
+	})
+
+	buf := new(bytes.Buffer)
+	if err := format.Node(buf, fset, node); err != nil {
+		panic(err)
+	}
+
+	err = os.WriteFile(testFile, buf.Bytes(), 0644)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func repairFailing(client *openai.Client, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string, workers int) {
 	histories, err := loadSliceFromFile(historyFile)
 	if err != nil {
 		panic(err)
 	}
-	errors := integration(errorFile, funcNamesFile)
+	errorJson := loadErrorJson(errorFile)
+	errors := integration(errorJson, histories)
+	removeFunction(testFilePath, errors)
+
+	var mutex sync.Mutex
+	wg := sync.WaitGroup{}
+	sem := make(chan struct{}, workers)
+
+	file, err := os.Create(saveCompletionFile)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for targetName, errorMsg := range errors {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(targetName, errorMsg string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			prompt := baseprompt + errorMsg
+
+			for k, chatHistory := range histories {
+				functionNames := chatHistory.FunctionNames
+				flag := false
+				for _, functionName := range functionNames {
+					if functionName == targetName {
+						flag = true
+					}
+				}
+				if flag {
+
+					mutex.Lock()
+					histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
+						Role:    openai.ChatMessageRoleUser,
+						Content: prompt,
+					})
+					mutex.Unlock()
+					completion := chat(client, "", histories[k].History)
+					extractedFunctions := extractedGeneratedCode(completion)
+					funcNames := extractFuntionName(extractedFunctions)
+					mutex.Lock()
+					histories[k].FunctionNames = funcNames
+					histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
+						Role:    openai.ChatMessageRoleAssistant,
+						Content: completion,
+					})
+
+					_, err := file.WriteString(extractedFunctions + "\n")
+					if err != nil {
+						panic(err)
+					}
+					mutex.Unlock()
+
+				}
+			}
+		}(targetName, errorMsg)
+	}
+
+	wg.Wait()
+
+	err = saveSliceToFile(histories, saveHistroyFile)
+	if err != nil {
+		panic(err)
+	}
+
+}
+
+func isEmptyFunction(f *ast.FuncDecl) bool {
+	// 检查函数体是否为空或仅包含注释
+	if f.Body == nil || len(f.Body.List) == 0 {
+		return true
+	}
+	return false
+}
+
+func collect_empty(testFilePath string) []string {
+	emptyFunction := []string{}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, testFilePath, nil, parser.ParseComments)
+	if err != nil {
+		panic(err)
+	}
+
+	// 遍历 AST
+	ast.Inspect(file, func(n ast.Node) bool {
+		// 检查是否为函数声明
+		if funcDecl, ok := n.(*ast.FuncDecl); ok {
+			// 检查函数是否为空
+			if isEmptyFunction(funcDecl) {
+				emptyFunction = append(emptyFunction, funcDecl.Name.Name)
+			}
+		}
+		return true
+	})
+
+	return emptyFunction
+}
+
+type duJson struct {
+	Origin    string `json:"origin"`
+	Change    string `json:"change"`
+	UniqueStr string `json:"uniqueStr"`
+}
+
+func modify_duplicated(duplicatedJsonFile string, histories *[]ChatHistory) {
+	file, err := os.Open(duplicatedJsonFile)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	// 读取文件内容
+	byteValue, err := io.ReadAll(file)
+	if err != nil {
+		panic(err)
+	}
+
+	var duplicatedJson []duJson
+	err = json.Unmarshal(byteValue, &duplicatedJson)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, duError := range duplicatedJson {
+		for k, history := range *histories {
+			chatMsgs := history.History
+			lastMsg := chatMsgs[len(chatMsgs)-1]
+			if strings.Contains(lastMsg.Content, duError.UniqueStr) {
+				functionNames := history.FunctionNames
+				for k, item := range functionNames {
+					if item == duError.Origin {
+						functionNames[k] = duError.Change
+						break
+					}
+				}
+				fmt.Println(1111)
+				(*histories)[k].Duplicated = true
+				(*histories)[k].FunctionNames = functionNames
+				break
+			}
+		}
+	}
+}
+
+func repairCompilation(client *openai.Client, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string, workers int, testFilePath string) {
+	histories, err := loadSliceFromFile(historyFile)
+	if err != nil {
+		panic(err)
+	}
+
+	errorJson := loadErrorJson(errorFile)
+
+	for k := range errorJson {
+		errorJson[k] = baseprompt + errorJson[k]
+	}
+
+	emptyFunctions := collect_empty(testFilePath)
+	fmt.Println("empty function", len(emptyFunctions))
+
+	for _, emptyFunction := range emptyFunctions {
+		errorJson[emptyFunction] = fmt.Sprintf("The function %s is empty, re-generate it again", emptyFunction)
+	}
+
+	modify_duplicated("duplicated.json", &histories)
+
+	errors := integration(errorJson, histories)
 
 	var mutex sync.Mutex
 	wg := sync.WaitGroup{}
@@ -342,8 +678,6 @@ func repairCompilation(client *openai.Client, historyFile string, errorFile stri
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			prompt := baseprompt + errorMsg
-
 			for k, chatHistory := range histories {
 				functionNames := chatHistory.FunctionNames
 				flag := false
@@ -356,7 +690,7 @@ func repairCompilation(client *openai.Client, historyFile string, errorFile stri
 					mutex.Lock()
 					histories[k].History = append(histories[k].History, openai.ChatCompletionMessage{
 						Role:    openai.ChatMessageRoleUser,
-						Content: prompt,
+						Content: errorMsg,
 					})
 					mutex.Unlock()
 					completion := chat(client, "", histories[k].History)
@@ -375,29 +709,25 @@ func repairCompilation(client *openai.Client, historyFile string, errorFile stri
 	wg.Wait()
 	fmt.Println("All goroutines completed.")
 
-	err = saveSliceToFile(histories, saveHistroyFile)
-	if err != nil {
-		panic(err)
-	}
-	funcNamesList := [][]string{}
-
-	for _, history := range histories {
+	for k, history := range histories {
 		chatMsgs := history.History
 		lastMsg := chatMsgs[len(chatMsgs)-1]
 		extractedFunctions := extractedGeneratedCode(lastMsg.Content)
-		funcNames := extractFuntionName(extractedFunctions)
-		history.FunctionNames = funcNames
-		funcNamesList = append(funcNamesList, funcNames)
+		if !history.Duplicated {
+			funcNames := extractFuntionName(extractedFunctions)
+			histories[k].FunctionNames = funcNames
+		}
+
 		_, err := file.WriteString(extractedFunctions + "\n")
 		if err != nil {
 			panic(err)
 		}
 	}
-	saveFuncNamesToFile(funcNamesFile, funcNamesList)
-}
 
-func repair_failing(){
-
+	err = saveSliceToFile(histories, saveHistroyFile)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func parseJsonFile(filename string) map[string]string {
@@ -420,103 +750,6 @@ func parseJsonFile(filename string) map[string]string {
 	}
 
 	return result
-}
-
-const structType = "// argsort is a helper that implements sort.Interface, as used by// Argsort and ArgsortStable.\ntype argsort struct {\ns []float64 \n inds []int\n}"
-
-func GetBaseFunctionDoc() map[string]string {
-	baseFunctionMap := make(map[string]string)
-	filepath := "/Users/maike/Desktop/gonum/internal/asm/f64/stubs_amd64.go"
-
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filepath, nil, parser.ParseComments)
-
-	if err != nil {
-		panic(err)
-	}
-
-	ast.Inspect(node, func(n ast.Node) bool {
-
-		fn, ok := n.(*ast.FuncDecl)
-		if ok {
-			docString := fn.Doc.Text()
-			name := fn.Name.Name
-			baseFunctionMap[name] = docString
-		}
-		return true
-	})
-	return baseFunctionMap
-}
-
-func ExtractFunctionLevel_3(filename string, baseFunctionMap map[string]string) []string {
-	functionList := make([]string, 0)
-
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, filename, nil, 0)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	for _, decl := range f.Decls {
-		funcDecl, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-
-		funcStart := fset.Position(funcDecl.Pos()).Offset
-		funcEnd := fset.Position(funcDecl.End()).Offset
-		docString := funcDecl.Doc.Text()
-		var content []byte
-		content, err = os.ReadFile(filename)
-		if err != nil {
-			panic(err)
-		}
-		funcCode := strings.TrimSpace(string(content[funcStart:funcEnd]))
-
-		funcStr := docString + funcCode
-
-		functionName := funcDecl.Name.Name
-		if functionName == "Len" || functionName == "Less" || functionName == "Swap" {
-			funcStr += structType
-		}
-
-		baseFunctionDocList := make([]string, 0)
-
-		if funcDecl.Body != nil {
-			for _, stmt := range funcDecl.Body.List {
-				baseFunctionDoc := inspectStmt(stmt, baseFunctionMap)
-				if baseFunctionDoc != "" {
-					baseFunctionDocList = append(baseFunctionDocList, baseFunctionDoc)
-				}
-			}
-		}
-
-		funcStr += strings.Join(baseFunctionDocList, "\n")
-		functionList = append(functionList, funcStr)
-	}
-	// fmt.Println(functionList[1])
-	return functionList
-}
-
-func inspectStmt(stmt ast.Stmt, baseFunctionMap map[string]string) string {
-	var docstring string = ""
-	ast.Inspect(stmt, func(n ast.Node) bool {
-
-		callExpr, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-
-		if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-			methodName := selExpr.Sel.Name
-			if docs, ok := baseFunctionMap[methodName]; ok {
-				docstring = docs
-			}
-		}
-
-		return true
-	})
-	return docstring
 }
 
 func saveSliceToFile(slice []ChatHistory, filename string) error {
@@ -557,29 +790,7 @@ func loadSliceFromFile(filename string) ([]ChatHistory, error) {
 	return slice, nil
 }
 
-type NamesStruct struct {
-	Names [][]string `json:"names"`
-}
-
-func saveFuncNamesToFile(filename string, funcNames [][]string) {
-	file, err := os.Create(filename)
-	if err != nil {
-		panic(err)
-	}
-
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	names := NamesStruct{
-		Names: funcNames,
-	}
-	err = encoder.Encode(names)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func integration(errorFilePath, funcNameFilePath string) map[string]string {
+func loadErrorJson(errorFilePath string) map[string]string {
 	efile, err := os.Open(errorFilePath)
 	if err != nil {
 		panic(err)
@@ -596,28 +807,20 @@ func integration(errorFilePath, funcNameFilePath string) map[string]string {
 	if err := json.Unmarshal(bytes, &errorJSON); err != nil {
 		panic(err)
 	}
+	return errorJSON
+}
 
-	ffile, err := os.Open(funcNameFilePath)
-	if err != nil {
-		panic(err)
-	}
-	defer ffile.Close()
-
-	bytes, err = io.ReadAll(ffile)
-	if err != nil {
-		panic(err)
-	}
-
-	names := NamesStruct{}
-	if err := json.Unmarshal(bytes, &names); err != nil {
-		panic(err)
+func integration(errorJSON map[string]string, histories []ChatHistory) map[string]string {
+	names := [][]string{}
+	for _, history := range histories {
+		names = append(names, history.FunctionNames)
 	}
 
 	funcNeedFmt := make(map[string]bool)
 	keyToRemove := make([]string, 0)
 
 	for funcName, errMsg := range errorJSON {
-		for _, funcNameList := range names.Names {
+		for _, funcNameList := range names {
 			if len(funcNameList) == 1 {
 				continue
 			}
@@ -649,4 +852,86 @@ func integration(errorFilePath, funcNameFilePath string) map[string]string {
 		errorJSON[k] = errorJSON[k][:len(errorJSON[k])-1]
 	}
 	return errorJSON
+}
+
+func getFunctionSignType(sourceFile string, saveJsonFile string) {
+	typeMap := map[string][]string{}
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, sourceFile, nil, parser.ParseComments)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for _, decl := range node.Decls {
+		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+			typeMap[funcDecl.Name.Name] = []string{}
+			if funcDecl.Recv != nil {
+				for _, recv := range funcDecl.Recv.List {
+					if starExpr, ok := recv.Type.(*ast.StarExpr); ok {
+						if ident, ok := starExpr.X.(*ast.Ident); ok {
+							typeMap[funcDecl.Name.Name] = AppendIfNotPresent(typeMap[funcDecl.Name.Name], ident.Name)
+						}
+					} else if ident, ok := recv.Type.(*ast.Ident); ok {
+						typeMap[funcDecl.Name.Name] = AppendIfNotPresent(typeMap[funcDecl.Name.Name], ident.Name)
+					}
+				}
+			}
+
+			for _, param := range funcDecl.Type.Params.List {
+				for range param.Names {
+					typeName := getTypeName(param.Type)
+					typeMap[funcDecl.Name.Name] = AppendIfNotPresent(typeMap[funcDecl.Name.Name], typeName)
+				}
+			}
+
+			if funcDecl.Type.Results != nil {
+				for _, result := range funcDecl.Type.Results.List {
+					resultTypeName := getTypeName(result.Type)
+					typeMap[funcDecl.Name.Name] = AppendIfNotPresent(typeMap[funcDecl.Name.Name], resultTypeName)
+				}
+			}
+		}
+	}
+	jsonData, err := json.MarshalIndent(typeMap, "", "    ")
+	if err != nil {
+		panic(err)
+	}
+
+	err = os.WriteFile(saveJsonFile, jsonData, 0644)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func getTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	case *ast.SelectorExpr:
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name + "." + t.Sel.Name
+		}
+	case *ast.ArrayType:
+		// 对于数组或切片，递归获取元素类型的名称
+		elemType := getTypeName(t.Elt)
+		return elemType
+
+	case *ast.FuncType:
+		return "need manual"
+	}
+	return ""
+}
+
+func AppendIfNotPresent(slice []string, item string) []string {
+	for _, v := range slice {
+		if v == item {
+			return slice
+		}
+	}
+	return append(slice, item)
 }

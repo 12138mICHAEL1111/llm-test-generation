@@ -1,0 +1,336 @@
+func TestDB_String(t *testing.T) {
+	db := &bolt.DB{}
+	db.Init("test.db")
+	expected := "DB<\"test.db\">"
+	if result := db.String(); result != expected {
+		t.Errorf("Unexpected result. Expected: %s, Got: %s", expected, result)
+	}
+}
+func TestInfo(t *testing.T) {
+	db, err := bolt.Open("./test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	info := db.Info()
+
+	// Add test cases to verify Info function behavior
+	_ = info // This line is added to avoid the "declared and not used" error
+}
+func TestIsReadOnly(t *testing.T) {
+	db := &bolt.DB{} // Create a DB instance
+
+	db.SetReadOnly(true) // Set readOnly flag to true
+
+	// Check if IsReadOnly function returns true
+	if readOnly := db.IsReadOnly(); !readOnly {
+		t.Errorf("Expected IsReadOnly to return true, but got false")
+	}
+
+	db.SetReadOnly(false) // Set readOnly flag to false
+
+	// Check if IsReadOnly function returns false
+	if readOnly := db.IsReadOnly(); readOnly {
+		t.Errorf("Expected IsReadOnly to return false, but got true")
+	}
+}
+func TestDB_GoString(t *testing.T) {
+	db := &bolt.DB{}
+	db.Init("/path/to/database")
+	expected := "bolt.DB{path:\"/path/to/database\"}"
+
+	if result := db.GoString(); result != expected {
+		t.Errorf("Expected %s, but got %s", expected, result)
+	}
+}
+func TestSync(t *testing.T) {
+	// Create a new BoltDB instance for testing
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("Error closing database: %v", err)
+		}
+	}()
+
+	// Perform Sync operation and check for errors
+	if err := db.Sync(); err != nil {
+		t.Errorf("Error syncing database: %v", err)
+	}
+}
+func TestPath(t *testing.T) {
+	// Open a temporary database for testing
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	expectedPath := "test.db"
+	actualPath := db.Path()
+
+	if actualPath != expectedPath {
+		t.Errorf("Path() returned incorrect path, expected: %s, got: %s", expectedPath, actualPath)
+	}
+}
+func TestOpen(t *testing.T) {
+	// Create a temporary file for testing
+	tmpfile, err := os.CreateTemp("", "testdb*.db")
+	if err != nil {
+		t.Fatalf("Error creating temporary file: %v", err)
+	}
+	defer os.Remove(tmpfile.Name())
+
+	// Test opening a new database
+	db, err := bolt.Open(tmpfile.Name(), 0666, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	// Check if the database was opened successfully
+	if db == nil {
+		t.Fatalf("Expected non-nil DB instance, got nil")
+	}
+}
+func TestClose(t *testing.T) {
+	// Create a temporary test database
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Errorf("Error opening database: %s", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	// Perform operations on the database
+
+	// Close the database
+	err = db.Close()
+	if err != nil {
+		t.Errorf("Error closing database: %s", err)
+	}
+
+	// Ensure all transactions are closed
+	if len(db.Txns()) > 0 {
+		t.Errorf("Unclosed transactions found after closing the database")
+	}
+
+	// Test that the database is no longer opened
+	if db.IsOpened() {
+		t.Errorf("Database is still marked as opened after closing")
+	}
+}
+func TestBeginReadOnly(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin(false)
+	if err != nil {
+		t.Fatalf("Error beginning read-only transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Perform read-only operations within the transaction
+}
+
+func TestBeginReadWrite(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin(true)
+	if err != nil {
+		t.Fatalf("Error beginning read-write transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Perform read-write operations within the transaction
+}
+func TestUpdate(t *testing.T) {
+	// Create a new Bolt DB
+	db, err := bolt.Open("/path/to/db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		// Perform some operations within the transaction
+		bucket, err := tx.CreateBucket([]byte("test"))
+		if err != nil {
+			return err
+		}
+
+		err = bucket.Put([]byte("key"), []byte("value"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Errorf("error updating database: %v", err)
+	}
+}
+func TestView(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err := db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("testbucket"))
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+
+		value := bucket.Get([]byte("key1"))
+		if value == nil {
+			return bolt.ErrKeyNotFound
+		}
+
+		return nil
+	})
+
+	if err != nil && err != bolt.ErrKeyNotFound {
+		t.Errorf("error in View function: %v", err)
+	}
+}
+func TestStats(t *testing.T) {
+	db, err := bolt.Open("/path/to/database", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	_ = db.Stats() // Fix for stats declared and not used error
+
+	// Add test cases to validate the Stats function output
+	// For example:
+	// if stats.FreePageN != expectedFreePageN {
+	//     t.Errorf("incorrect number of free pages, expected: %d, got: %d", expectedFreePageN, stats.FreePageN)
+	// }
+}
+func TestBatch(t *testing.T) {
+	// Open a Bolt database for testing.
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Define a test function to pass to Batch.
+	testFn := func(tx *bolt.Tx) error {
+		// Perform some operations inside the transaction.
+		// This function should be idempotent.
+		return nil
+	}
+
+	// Call the Batch function with the test function.
+	err = db.Batch(testFn)
+	if err != nil {
+		t.Errorf("Batch execution failed: %v", err)
+	}
+
+	// Wait for batch to finish before running assertions
+	time.Sleep(time.Millisecond)
+
+	// Add your assertions here to validate the behavior of Batch function.
+}
+func TestStats_Sub(t *testing.T) {
+	// Create two sets of Stats for testing
+	stats1 := &bolt.Stats{
+		FreePageN:     10,
+		PendingPageN:  5,
+		FreeAlloc:     1000,
+		FreelistInuse: 500,
+		TxN:           10,
+		TxStats: bolt.TxStats{
+			PageCount:   20,
+			PageAlloc:   2000,
+			CursorCount: 5,
+			NodeCount:   30,
+			NodeDeref:   15,
+			Rebalance:   3,
+			RebalanceTime: 5 * time.Second,
+			Split:   2,
+			Spill:   1,
+			SpillTime: 2 * time.Second,
+			Write:   25,
+			WriteTime: 10 * time.Second,
+		},
+	}
+
+	stats2 := &bolt.Stats{
+		TxN: 5,
+		TxStats: bolt.TxStats{
+			PageCount:   10,
+			PageAlloc:   1000,
+			CursorCount: 3,
+			NodeCount:   15,
+			NodeDeref:   5,
+			Rebalance:   2,
+			RebalanceTime: 3 * time.Second,
+			Split:   1,
+			Spill:   0,
+			SpillTime: 1 * time.Second,
+			Write:   10,
+			WriteTime: 5 * time.Second,
+		},
+	}
+
+	expectedDiffStats := bolt.Stats{
+		FreePageN:     10,
+		PendingPageN:  5,
+		FreeAlloc:     1000,
+		FreelistInuse: 500,
+		TxN:           5,
+		TxStats: bolt.TxStats{
+			PageCount:   10,
+			PageAlloc:   1000,
+			CursorCount: 2,
+			NodeCount:   15,
+			NodeDeref:   10,
+			Rebalance:   1,
+			RebalanceTime: 2 * time.Second,
+			Split:   1,
+			Spill:   1,
+			SpillTime: 1 * time.Second,
+			Write:   15,
+			WriteTime: 5 * time.Second,
+		},
+	}
+
+	diff := stats1.Sub(stats2)
+
+	if diff.FreePageN != expectedDiffStats.FreePageN ||
+		diff.PendingPageN != expectedDiffStats.PendingPageN ||
+		diff.FreeAlloc != expectedDiffStats.FreeAlloc ||
+		diff.FreelistInuse != expectedDiffStats.FreelistInuse ||
+		diff.TxN != expectedDiffStats.TxN ||
+		diff.TxStats.PageCount != expectedDiffStats.TxStats.PageCount ||
+		diff.TxStats.PageAlloc != expectedDiffStats.TxStats.PageAlloc ||
+		diff.TxStats.CursorCount != expectedDiffStats.TxStats.CursorCount ||
+		diff.TxStats.NodeCount != expectedDiffStats.TxStats.NodeCount ||
+		diff.TxStats.NodeDeref != expectedDiffStats.TxStats.NodeDeref ||
+		diff.TxStats.Rebalance != expectedDiffStats.TxStats.Rebalance ||
+		diff.TxStats.RebalanceTime != expectedDiffStats.TxStats.RebalanceTime ||
+		diff.TxStats.Split != expectedDiffStats.TxStats.Split ||
+		diff.TxStats.Spill != expectedDiffStats.TxStats.Spill ||
+		diff.TxStats.SpillTime != expectedDiffStats.TxStats.SpillTime ||
+		diff.TxStats.Write != expectedDiffStats.TxStats.Write ||
+		diff.TxStats.WriteTime != expectedDiffStats.TxStats.WriteTime {
+		t.Errorf("Sub function returned incorrect difference stats: %v, expected: %v", diff, expectedDiffStats)
+	}
+}

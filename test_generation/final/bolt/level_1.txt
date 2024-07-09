@@ -1,0 +1,248 @@
+package bolt_test
+
+import (
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/boltdb/bolt"
+)
+
+func TestPath(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	defer os.Remove("test.db")
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	path := db.Path()
+	if path != "test.db" {
+		t.Errorf("expected database file path to be 'test.db', but got %s", path)
+	}
+}
+func TestGoString(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	defer os.Remove("test.db")
+
+	if err != nil {
+		t.Fatalf("error opening database: %s", err)
+	}
+	defer db.Close()
+
+	expected := fmt.Sprintf("bolt.DB{path:\"%s\"}", "test.db")
+	actual := db.GoString()
+
+	if actual != expected {
+		t.Errorf("Expected: %s, but got: %s", expected, actual)
+	}
+}
+
+func TestSync(t *testing.T) {
+	db, err := bolt.Open("my.db", 0600, nil)
+	defer os.Remove("my.db")
+
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	// Perform some operations on the database
+
+	err = db.Sync()
+	if err != nil {
+		t.Errorf("Error syncing database: %v", err)
+	}
+}
+func TestStats(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	defer os.Remove("test.db")
+
+	if err != nil {
+		t.Errorf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	stats := db.Stats()
+
+	if stats.TxN != 0 {
+		t.Errorf("Expected TxN to be 0, got %d", stats.TxN)
+	}
+	if stats.OpenTxN != 0 {
+		t.Errorf("Expected OpenTxN to be 0, got %d", stats.OpenTxN)
+	}
+	// Add more assertions for other fields in the Stats struct
+}
+func TestOpen(t *testing.T) {
+	path := "test.db"
+	mode := os.FileMode(0600)
+	options := &bolt.Options{
+		ReadOnly:        false,
+		NoGrowSync:      false,
+		MmapFlags:       0,
+		Timeout:         0,
+		InitialMmapSize: 0,
+	}
+
+	db, err := bolt.Open(path, mode, options)
+	defer os.Remove("test.db")
+
+	defer func() {
+		err = db.Close()
+		if err != nil {
+			t.Errorf("Failed to close DB: %v", err)
+		}
+	}()
+
+	if err != nil {
+		t.Errorf("Failed to open DB: %v", err)
+	}
+}
+func TestClose(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	defer os.Remove("test.db")
+
+	if err != nil {
+		t.Fatalf("Error opening database: %s", err)
+	}
+	defer db.Close()
+
+	err = db.Close()
+	if err != nil {
+		t.Errorf("Error closing database: %s", err)
+	}
+
+	// Add more test cases if needed
+}
+func TestBegin(t *testing.T) {
+	// Create a new Bolt DB instance
+	db, err := bolt.Open("mydb.db", 0600, nil)
+	defer os.Remove("mydb.db")
+
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Test Begin() function with writable set to true
+	tx, err := db.Begin(true)
+	if err != nil {
+		t.Fatalf("Failed to begin read-write transaction: %v", err)
+	}
+	if tx.Writable() == false {
+		t.Errorf("Expected read-write transaction but got read-only transaction")
+	}
+	tx.Rollback()
+
+	// Test Begin() function with writable set to false
+	tx, err = db.Begin(false)
+	if err != nil {
+		t.Fatalf("Failed to begin read-only transaction: %v", err)
+	}
+	if tx.Writable() == true {
+		t.Errorf("Expected read-only transaction but got read-write transaction")
+	}
+	tx.Rollback()
+}
+
+func TestInfo(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	defer os.Remove("test.db")
+
+	if err != nil {
+		t.Fatalf("Error opening database: %s", err)
+	}
+	defer db.Close()
+
+	info := db.Info()
+
+	if info == nil {
+		t.Errorf("Expected Info to return a non-nil value")
+	}
+}
+
+func TestUpdate(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	defer os.Remove("test.db")
+
+	if err != nil {
+		t.Fatalf("Error opening database: %s", err)
+	}
+	defer db.Close()
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucket([]byte("test"))
+		if err != nil {
+			return err
+		}
+		if err := bucket.Put([]byte("key"), []byte("value")); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Error updating database: %s", err)
+	}
+}
+func TestView(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	defer os.Remove("test.db")
+
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("test"))
+		if err != nil {
+			return err
+		}
+		err = b.Put([]byte("key"), []byte("value"))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Error updating database: %v", err)
+	}
+
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("test"))
+		v := b.Get([]byte("key"))
+		if string(v) != "value" {
+			return fmt.Errorf("Unexpected value: %s", v)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Errorf("Error viewing database: %v", err)
+	}
+}
+
+func TestBatch(t *testing.T) {
+	db, err := bolt.Open("my-database.db", 0600, nil)
+	defer os.Remove("my-database.db")
+	if err != nil {
+		t.Fatalf("error opening database: %s", err)
+	}
+	defer db.Close()
+
+	err = db.Batch(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucket([]byte("MyBucket"))
+		if err != nil {
+			return err
+		}
+
+		err = bucket.Put([]byte("key1"), []byte("value1"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("error running batch function: %s", err)
+	}
+}
