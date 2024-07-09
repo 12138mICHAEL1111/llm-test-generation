@@ -10,9 +10,9 @@ def count_func_num(filepath):
     matches = function_pattern.findall(content)
     test_func_num = 0
     for match in matches:
-        if "func Test" in match:
+        if "Test" in match:
             test_func_num +=1
-    print("Number of functions:", len(matches))
+    print("Number of valid functions:", len(matches))
     print("Test functions", test_func_num)
     
 def find_nearest_function(filepath, line_number):
@@ -61,7 +61,9 @@ if __name__ == "__main__":
     
     with open('ide_error.json', 'r') as file:
         errors = json.load(file)
-            
+    
+    print("number of compilation erros:", len(errors))
+    
     for error in tqdm(errors):
         line = get_line_from_file(test_file_path, error["startLineNumber"])
         target_func = find_nearest_function(test_file_path, error["startLineNumber"])

@@ -16,7 +16,6 @@ def extract_test_function_names(filepath):
     for match in matches:
         test_function_names.append(match)
 
-    print("Number of tests:", len(test_function_names))
     return test_function_names
 
 # assert fails
@@ -112,7 +111,6 @@ def collect_error(test_function_list,error_json,command):
             continue
         
         result = result[index + 1 :]
-        
         if "\tError Trace" in result:
             collect_assert(result, error_json, test_function)
         else:
@@ -133,7 +131,6 @@ def count_fixed(error_json):
     num_fixed = 0 
     for old_error in old_error_json:
         if old_error not in error_json:
-            print(old_error)
             num_fixed += 1
     
     print("number fixed", num_fixed)
@@ -143,7 +140,8 @@ if __name__ == "__main__":
     error_json = {}
 
     test_function_list = extract_test_function_names("db_test.go")
-    # test_function_list = ["TestSleep"]
+    # print(test_function_list)
+    # test_function_list = ["TestGoString"]
     command = [
         "go",
         "test",
@@ -155,6 +153,8 @@ if __name__ == "__main__":
     ]
 
     collect_error(test_function_list,error_json,command)
+    
+    count_fixed(error_json)
     
     print("number of failing tests",len(error_json))
     with open('error.json', 'w') as json_file:
