@@ -1,0 +1,16 @@
+{
+	"Path":"func (db *DB) Path() string",
+	"GoString" : "func (db *DB) GoString() string",
+	"String": "func (db *DB) String() string",
+	"Open":"func Open(path string, mode os.FileMode, options *Options) (*DB, error)",
+	"Close":"func (db *DB) Close() error",
+	"Begin":"func (db *DB) Begin(writable bool) (*Tx, error)",
+	"Update":"func (db *DB) Update(fn func(*Tx) error) error",
+	"View":"func (db *DB) View(fn func(*Tx) error) error",
+	"Batch":"func (db *DB) Batch(fn func(*Tx) error) error",
+	"Stats":"func (db *DB) Stats() Stats ",
+	"Info":"func (db *DB) Info() *Info",
+	"IsReadOnly":"func (db *DB) IsReadOnly() bool",
+	"Sub":"func (s *Stats) Sub(other *Stats) Stats",
+	"Sync":"func (db *DB) Sync() error { return fdatasync(db) }"
+}

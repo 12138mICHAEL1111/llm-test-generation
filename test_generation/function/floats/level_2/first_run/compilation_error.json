@@ -1,6 +1,0 @@
-{
-    "TestArgsort_Len": "For code argsort := argsort{arr},cannot use arr (variable of type []int) as []float64 value in struct literal",
-    "TestLess": "For code a := argsort{s: []int{3, 1, 2}} ,cannot use []int{…} (value of type []int) as []float64 value in struct literal",
-    "TestArgsort_Swap":"For code s: []int{1, 2, 3, 4, 5},cannot use []int{…} (value of type []int) as []float64 value in struct literal",
-    "TestNearestIdxForSpan":"For code got := NearestIdxForSpan(test.n, test.l, test.u, test.v) cannot use test.v (variable of type int) as float64 value in argument to NearestIdxForSpan. For code if got != test.want {,invalid operation: got != test.want (mismatched types int and float64)"
-}

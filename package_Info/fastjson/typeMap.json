@@ -1,0 +1,195 @@
+{
+    "Array": [
+        "Value",
+        "error"
+    ],
+    "Bool": [
+        "Value",
+        "bool",
+        "error"
+    ],
+    "Exists": [
+        "Value",
+        "",
+        "bool"
+    ],
+    "Float64": [
+        "Value",
+        "float64",
+        "error"
+    ],
+    "Get": [
+        "Value",
+        ""
+    ],
+    "GetArray": [
+        "Value",
+        ""
+    ],
+    "GetBool": [
+        "Value",
+        "",
+        "bool"
+    ],
+    "GetFloat64": [
+        "Value",
+        "",
+        "float64"
+    ],
+    "GetInt": [
+        "Value",
+        "",
+        "int"
+    ],
+    "GetInt64": [
+        "Value",
+        "",
+        "int64"
+    ],
+    "GetObject": [
+        "Value",
+        "",
+        "Object"
+    ],
+    "GetStringBytes": [
+        "Value",
+        "",
+        "byte"
+    ],
+    "GetUint": [
+        "Value",
+        "",
+        "uint"
+    ],
+    "GetUint64": [
+        "Value",
+        "",
+        "uint64"
+    ],
+    "Int": [
+        "Value",
+        "int",
+        "error"
+    ],
+    "Int64": [
+        "Value",
+        "int64",
+        "error"
+    ],
+    "Len": [
+        "Object",
+        "int"
+    ],
+    "MarshalTo": [
+        "Value",
+        "byte"
+    ],
+    "Object": [
+        "Value",
+        "Object",
+        "error"
+    ],
+    "Parse": [
+        "Parser",
+        "string",
+        "Value",
+        "error"
+    ],
+    "ParseBytes": [
+        "Parser",
+        "byte",
+        "Value",
+        "error"
+    ],
+    "String": [
+        "Type",
+        "string"
+    ],
+    "StringBytes": [
+        "Value",
+        "byte",
+        "error"
+    ],
+    "Type": [
+        "Value",
+        "Type"
+    ],
+    "Uint": [
+        "Value",
+        "uint",
+        "error"
+    ],
+    "Uint64": [
+        "Value",
+        "uint64",
+        "error"
+    ],
+    "Visit": [
+        "Object",
+        "need manual"
+    ],
+    "escapeString": [
+        "byte",
+        "string"
+    ],
+    "getKV": [
+        "Object",
+        "kv"
+    ],
+    "getValue": [
+        "cache",
+        "Value"
+    ],
+    "hasSpecialChars": [
+        "string",
+        "bool"
+    ],
+    "parseArray": [
+        "string",
+        "cache",
+        "int",
+        "Value",
+        "error"
+    ],
+    "parseObject": [
+        "string",
+        "cache",
+        "int",
+        "Value",
+        "error"
+    ],
+    "parseRawKey": [
+        "string",
+        "error"
+    ],
+    "parseRawNumber": [
+        "string",
+        "error"
+    ],
+    "parseRawString": [
+        "string",
+        "error"
+    ],
+    "parseValue": [
+        "string",
+        "cache",
+        "int",
+        "Value",
+        "error"
+    ],
+    "reset": [
+        "Object"
+    ],
+    "skipWS": [
+        "string"
+    ],
+    "skipWSSlow": [
+        "string"
+    ],
+    "unescapeKeys": [
+        "Object"
+    ],
+    "unescapeStringBestEffort": [
+        "string"
+    ]
+}

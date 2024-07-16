@@ -1,0 +1,233 @@
+func TestGetStringBytes(t *testing.T) {
+	value := &Value{s: "test"}
+	expected := []byte("test")
+
+	result := value.GetStringBytes()
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Expected %v, but got %v", expected, result)
+	}
+}
+func TestGetUint(t *testing.T) {
+	v := &Value{
+		s: "123",
+	}
+
+	result := v.GetUint()
+	expected := uint(123)
+
+	if result != expected {
+		t.Errorf("Expected %d, but got %d", expected, result)
+	}
+}
+func TestInt64(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{input: "123", expected: 123},
+		{input: "-456", expected: -456},
+		{input: "abc", expected: 0}, // Invalid input should return 0
+	}
+
+	for _, test := range tests {
+		v := &Value{s: test.input, t: TypeNumber}
+		result, err := v.Int64()
+		if err != nil {
+			t.Errorf("Int64() returned an error: %v", err)
+		}
+		if result != test.expected {
+			t.Errorf("Int64() returned %d, expected %d", result, test.expected)
+		}
+	}
+}
+func TestSkipWS(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"   hello", "   hello"},
+		{"world", "world"},
+		{"\t\t\tgoodbye", "\t\t\tgoodbye"},
+		{"", ""},
+		{"\n\n\n", "\n\n\n"},
+	}
+
+	for _, test := range tests {
+		result := skipWS(test.input)
+		if result != test.expected {
+			t.Errorf("Expected skipWS(%s) to be %s, but got %s", test.input, test.expected, result)
+		}
+	}
+}
+func TestUint64(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected uint64
+	}{
+		{"123", 123},
+		{"0", 0},
+		{"18446744073709551615", 18446744073709551615}, // Max uint64 value
+		{"-123", 0}, // Invalid input, expected 0
+		{"abc", 0},  // Invalid input, expected 0
+	}
+
+	for _, test := range tests {
+		v := &Value{s: test.input}
+		result, err := v.Uint64()
+
+		if err != nil {
+			t.Errorf("Uint64() returned an error for input %s: %v", test.input, err)
+		} else if result != test.expected {
+			t.Errorf("Uint64() returned %d for input %s, expected %d", result, test.input, test.expected)
+		}
+	}
+}
+func TestUint(t *testing.T) {
+	tests := []struct {
+		input  string
+		output uint
+		err    bool
+	}{
+		{input: "123", output: 123, err: false},
+		{input: "abc", output: 0, err: true},
+		{input: "18446744073709551615", output: 0, err: true}, // larger than maximum uint value
+	}
+
+	for _, test := range tests {
+		v := &Value{s: test.input, t: TypeNumber}
+		result, err := v.Uint()
+
+		if test.err && err == nil {
+			t.Errorf("Expected error for input %s, but got nil", test.input)
+		}
+
+		if !test.err && err != nil {
+			t.Errorf("Unexpected error for input %s: %v", test.input, err)
+		}
+
+		if result != test.output {
+			t.Errorf("For input %s, expected %d but got %d", test.input, test.output, result)
+		}
+	}
+}
+func TestUnescapeStringBestEffort(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Hello,\\nWorld!", "Hello,\nWorld!"},
+		{"This is a \\\"test\\\" string", "This is a \"test\" string"},
+		{"Unicode: \\u0048\\u0065\\u006c\\u006c\\u006f", "Unicode: Hello"},
+		{"Invalid Unicode: \\u123", "Invalid Unicode: \\u123"},
+		{"Escaped backslash: \\\\", "Escaped backslash: \\"},
+	}
+
+	for _, test := range tests {
+		result := unescapeStringBestEffort(test.input)
+		if result != test.expected {
+			t.Errorf("Input: %s, Expected: %s, Got: %s", test.input, test.expected, result)
+		}
+	}
+}
+func TestFloat64(t *testing.T) {
+	tests := []struct {
+		input  string
+		output float64
+		err    bool
+	}{
+		{input: "123.45", output: 123.45, err: false},
+		{input: "abc", output: 0, err: true},
+		{input: "789", output: 789, err: false},
+	}
+
+	for _, test := range tests {
+		v := &Value{s: test.input, t: TypeNumber}
+		result, err := v.Float64()
+
+		if test.err && err == nil {
+			t.Errorf("Expected error for input %s, but got nil", test.input)
+		}
+
+		if !test.err && err != nil {
+			t.Errorf("Unexpected error for input %s: %s", test.input, err.Error())
+		}
+
+		if result != test.output {
+			t.Errorf("Expected output %f for input %s, but got %f", test.output, test.input, result)
+		}
+	}
+}
+func TestGetInt(t *testing.T) {
+	// Create a test Value object
+	value := &Value{
+		s: "123",
+	}
+
+	// Test case 1: Valid input
+	result := value.GetInt()
+	expected := 123
+	if result != expected {
+		t.Errorf("Test case 1 - Expected: %d, but got: %d", expected, result)
+	}
+
+	// Test case 2: Invalid input
+	value = &Value{
+		s: "abc",
+	}
+	result = value.GetInt()
+	expected = 0
+	if result != expected {
+		t.Errorf("Test case 2 - Expected: %d, but got: %d", expected, result)
+	}
+}
+func TestParseRawKey(t *testing.T) {
+	tests := []struct {
+		input       string
+		expectedKey string
+		expectedRem string
+		expectedErr error
+	}{
+		{`"key":"value"`, "key", ":\"value\"", nil},
+		{`"key":"value`, "", "", fmt.Errorf(`missing closing '"'`)},
+		{`"key":"val\"ue"`, "key", ":\"val\\\"ue\"", nil},
+	}
+
+	for _, test := range tests {
+		key, rem, err := parseRawKey(test.input)
+		if key != test.expectedKey || rem != test.expectedRem || !reflect.DeepEqual(err, test.expectedErr) {
+			t.Errorf("parseRawKey(%s) = (%s, %s, %v), expected (%s, %s, %v)", test.input, key, rem, err, test.expectedKey, test.expectedRem, test.expectedErr)
+		}
+	}
+}
+func TestParseRawString(t *testing.T) {
+	tests := []struct {
+		input          string
+		expectedPrefix string
+		expectedSuffix string
+		expectedError  string
+	}{
+		{"\"hello\"", "hello", "", ""},
+		{"\"hello\\\"world\"", "hello\\\"world", "", ""},
+		{"\"hello\\\"world", "", "", "missing closing '\"'"},
+		{"\"hello\\\\\"", "hello\\", "", ""},
+		{"\"hello\\\\\\\"", "hello\\\\", "", ""},
+		{"\"hello\\\\\\\"world", "", "", "missing closing '\"'"},
+	}
+
+	for _, test := range tests {
+		prefix, suffix, err := parseRawString(test.input)
+
+		if prefix != test.expectedPrefix {
+			t.Errorf("For input %q, expected prefix %q, but got %q", test.input, test.expectedPrefix, prefix)
+		}
+
+		if suffix != test.expectedSuffix {
+			t.Errorf("For input %q, expected suffix %q, but got %q", test.input, test.expectedSuffix, suffix)
+		}
+
+		if err != nil && err.Error() != test.expectedError {
+			t.Errorf("For input %q, expected error %q, but got %q", test.input, test.expectedError, err.Error())
+		}
+	}
+}

@@ -1,4 +1,0 @@
-{
-    "TestArgsort_Len": "For code {argsort{s: []float64{1, 2, 3, 4, 5}}, expected: 5}, {argsort{s: []float64{}}, expected: 0}, {argsort{s: []float64{1}}, expected: 1}, mixture of field:value and value elements in struct literal",
-    "TestDivTo":"For code t := []float64{1, 2, 3}, no new variables on left side of := and cannot use []float64{…} (value of type []float64) as *testing.T value in assignment. For code result := DivTo(dst, s, t), cannot use t (variable of type *testing.T) as []float64 value in argument to DivTo"
-}

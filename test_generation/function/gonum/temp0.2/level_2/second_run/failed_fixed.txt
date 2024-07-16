@@ -1,0 +1,202 @@
+func TestAddScaledTo(t *testing.T) {
+	dst := []float64{1.0, 2.0, 3.0}
+	y := []float64{4.0, 5.0, 6.0}
+	alpha := 2.0
+	s := []float64{7.0, 8.0, 9.0}
+
+	expected := []float64{18.0, 21.0, 24.0}
+	result := AddScaledTo(dst, y, alpha, s)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("AddScaledTo did not return the expected result. Expected: %v, Got: %v", expected, result)
+	}
+}
+func TestMinIdx(t *testing.T) {
+	tests := []struct {
+		input []float64
+		want  int
+	}{
+		{[]float64{1.0, 2.0, 3.0, 4.0, 5.0}, 0},
+		{[]float64{5.0, 4.0, 3.0, 2.0, 1.0}, 4},
+		{[]float64{3.0, 1.0, 4.0, 2.0, 5.0}, 1},
+		{[]float64{5.0, 4.0, 3.0, 2.0, math.NaN()}, 0},
+		{[]float64{math.NaN(), math.NaN(), math.NaN()}, 0},
+	}
+
+	for _, test := range tests {
+		got := MinIdx(test.input)
+		if got != test.want {
+			t.Errorf("MinIdx(%v) = %v; want %v", test.input, got, test.want)
+		}
+	}
+}
+func TestMaxIdx(t *testing.T) {
+	tests := []struct {
+		input    []float64
+		expected int
+	}{
+		{[]float64{1.0, 2.0, 3.0, 4.0, 5.0}, 4},
+		{[]float64{5.0, 4.0, 3.0, 2.0, 1.0}, 0},
+		{[]float64{3.0, 1.0, 4.0, 2.0, 5.0}, 4},
+		{[]float64{1.0, 1.0, 1.0, 1.0, 1.0}, 0},
+		{[]float64{}, -1}, // Expected index for empty slice is -1
+	}
+
+	for _, test := range tests {
+		result := MaxIdx(test.input)
+		if result != test.expected {
+			t.Errorf("For input %v, expected %d but got %d", test.input, test.expected, result)
+		}
+	}
+}
+func TestLogSumExp(t *testing.T) {
+	tests := []struct {
+		name string
+		s    []float64
+		want float64
+	}{
+		{
+			name: "Test case 1",
+			s:    []float64{1, 2, 3, 4, 5},
+			want: 5.451914395937685,
+		},
+		{
+			name: "Test case 2",
+			s:    []float64{0, 0, 0, 0, 0},
+			want: 0.6931471805599453,
+		},
+		{
+			name: "Test case 3",
+			s:    []float64{-1, -2, -3, -4, -5},
+			want: -0.3068528194400547,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := LogSumExp(tt.s); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("LogSumExp() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestLogSpan(t *testing.T) {
+	tests := []struct {
+		dst      []float64
+		l        float64
+		u        float64
+		expected []float64
+	}{
+		{[]float64{0, 0, 0}, 1, 10, []float64{1, 3.1622776601683795, 10}},
+		{[]float64{0, 0, 0, 0}, 2, 8, []float64{2, 4, 8, 8}},
+		{[]float64{0, 0, 0, 0, 0}, 5, 15, []float64{5, 7.0710678118654755, 10, 12.24744871391589, 15}},
+	}
+
+	for _, test := range tests {
+		result := LogSpan(test.dst, test.l, test.u)
+		if !reflect.DeepEqual(result, test.expected) {
+			t.Errorf("LogSpan(%v, %f, %f) = %v, expected %v", test.dst, test.l, test.u, result, test.expected)
+		}
+	}
+}
+func TestCumProd(t *testing.T) {
+	dst := []float64{1, 2, 3, 4}
+	s := []float64{2, 3, 4, 5}
+
+	result := CumProd(dst, s)
+
+	expected := []float64{2, 6, 12, 20}
+
+	for i := 0; i < len(result); i++ {
+		if result[i] != expected[i] {
+			t.Errorf("Expected %f at index %d, but got %f", expected[i], i, result[i])
+		}
+	}
+}
+
+func TestCumProd_Panic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic as expected")
+		}
+	}()
+
+	dst := []float64{1, 2, 3}
+	s := []float64{2, 3, 4, 5}
+
+	CumProd(dst, s)
+}
+func TestCumSum(t *testing.T) {
+	tests := []struct {
+		dst  []float64
+		s    []float64
+		want []float64
+	}{
+		{[]float64{1.0, 2.0, 3.0}, []float64{4.0, 5.0, 6.0}, []float64{5.0, 7.0, 9.0}},
+		{[]float64{0.5, 0.5}, []float64{0.25, 0.75}, []float64{0.75, 1.25}},
+		{[]float64{10.0, 20.0, 30.0}, []float64{1.0, 2.0, 3.0}, []float64{11.0, 22.0, 33.0}},
+	}
+
+	for _, tt := range tests {
+		got := CumSum(tt.dst, tt.s)
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("CumSum(%v, %v) = %v, want %v", tt.dst, tt.s, got, tt.want)
+		}
+	}
+}
+func TestCount(t *testing.T) {
+	tests := []struct {
+		name     string
+		f        func(float64) bool
+		s        []float64
+		expected int
+	}{
+		{
+			name:     "count positive numbers",
+			f:        func(x float64) bool { return x > 0 },
+			s:        []float64{1.5, -2.3, 4.7, -0.8, 3.2},
+			expected: 3,
+		},
+		{
+			name:     "count even numbers",
+			f:        func(x float64) bool { return int(x)%2 == 0 },
+			s:        []float64{2.0, 3.0, 4.0, 5.0, 6.0},
+			expected: 3,
+		},
+		{
+			name:     "count numbers greater than 10",
+			f:        func(x float64) bool { return x > 10 },
+			s:        []float64{5.5, 10.2, 15.7, 8.3, 12.1},
+			expected: 2,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := Count(test.f, test.s)
+			if result != test.expected {
+				t.Errorf("Expected %d, but got %d", test.expected, result)
+			}
+		})
+	}
+}
+func TestNorm(t *testing.T) {
+	tests := []struct {
+		input []float64
+		L     float64
+		want  float64
+	}{
+		{[]float64{1, 2, 3}, 2, 3.7416573867739413},
+		{[]float64{1, 2, 3}, 1, 6},
+		{[]float64{1, 2, 3}, math.Inf(1), 3},
+		{[]float64{1, 2, 3}, 3, 3.3019272488946263},
+		{[]float64{}, 2, 0},
+	}
+
+	for _, test := range tests {
+		got := Norm(test.input, test.L)
+		if got != test.want {
+			t.Errorf("Norm(%v, %v) = %v; want %v", test.input, test.L, got, test.want)
+		}
+	}
+}

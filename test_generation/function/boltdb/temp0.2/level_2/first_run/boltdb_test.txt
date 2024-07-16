@@ -1,0 +1,320 @@
+func TestDB_GoString(t *testing.T) {
+	db := &bolt.DB{path: "test.db"}
+	expected := fmt.Sprintf("bolt.DB{path:%q}", db.path)
+	result := db.GoString()
+
+	if result != expected {
+		t.Errorf("Expected: %s, but got: %s", expected, result)
+	}
+}
+
+func TestPath(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	expectedPath := "test.db"
+	actualPath := db.Path()
+
+	if actualPath != expectedPath {
+		t.Errorf("Expected path %s, but got %s", expectedPath, actualPath)
+	}
+}
+
+func TestClose(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Close()
+	if err != nil {
+		t.Errorf("Error closing database: %v", err)
+	}
+
+	// Add more test cases as needed
+}
+
+func TestOpen(t *testing.T) {
+	path := "test.db"
+	mode := os.FileMode(0644)
+	options := &bolt.Options{
+		Timeout:     5,
+		NoGrowSync:  false,
+		ReadOnly:    false,
+		MmapFlags:   0,
+		InitialMmapSize: 0,
+	}
+
+	db, err := bolt.Open(path, mode, options)
+	if err != nil {
+		t.Errorf("Error opening database: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("Error closing database: %v", err)
+		}
+	}()
+
+	// Add test cases to verify the behavior of the Open function
+}
+
+func TestIsReadOnly(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	// Test when database is not read-only
+	if db.IsReadOnly() {
+		t.Errorf("Expected database to not be read-only, but it is")
+	}
+
+	// Test when database is set to read-only
+	db.Close()
+	db, err = bolt.Open("test.db", 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("error opening read-only database: %v", err)
+	}
+	defer db.Close()
+
+	if !db.IsReadOnly() {
+		t.Errorf("Expected database to be read-only, but it is not")
+	}
+}
+
+func TestDB_String(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	expected := "DB<\"test.db\">"
+	result := db.String()
+
+	if result != expected {
+		t.Errorf("unexpected result, got: %s, want: %s", result, expected)
+	}
+}
+
+func TestInfo(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	info := db.Info()
+
+	if info == nil {
+		t.Error("Info() returned nil")
+	}
+
+	if info.Data == 0 {
+		t.Error("Info().Data is 0")
+	}
+
+	if info.PageSize != db.pageSize {
+		t.Errorf("Info().PageSize does not match db.pageSize. Expected: %d, Got: %d", db.pageSize, info.PageSize)
+	}
+}
+
+func TestBatch(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Batch(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucket([]byte("test"))
+		if err != nil {
+			return err
+		}
+		err = bucket.Put([]byte("key"), []byte("value"))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		t.Errorf("error executing batch: %v", err)
+	}
+}
+
+func TestView(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.View(func(tx *bolt.Tx) error {
+		// Add your test logic here
+		return nil
+	})
+
+	if err != nil {
+		t.Errorf("View function returned an error: %v", err)
+	}
+}
+
+func TestSync(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Sync()
+	if err != nil {
+		t.Errorf("error syncing database: %v", err)
+	}
+}
+
+func TestBegin(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin(true)
+	if err != nil {
+		t.Fatalf("error beginning read-write transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Add test cases here to verify the behavior of the Begin function
+}
+
+func TestStats_Sub(t *testing.T) {
+	s := bolt.Stats{
+		FreePageN:     10,
+		PendingPageN:  5,
+		FreeAlloc:     100,
+		FreelistInuse: 50,
+		TxN:           20,
+		OpenTxN:       5,
+		TxStats: bolt.TxStats{
+			PageCount:    50,
+			PageAlloc:    200,
+			CursorCount:  10,
+			NodeCount:    100,
+			NodeDeref:    30,
+			Rebalance:    5,
+			RebalanceTime: 100,
+			Split:        3,
+			Spill:        2,
+			SpillTime:    50,
+			Write:        15,
+			WriteTime:    80,
+		},
+	}
+
+	other := &bolt.Stats{
+		FreePageN:     5,
+		PendingPageN:  2,
+		FreeAlloc:     50,
+		FreelistInuse: 25,
+		TxN:           10,
+		OpenTxN:       2,
+		TxStats: bolt.TxStats{
+			PageCount:    20,
+			PageAlloc:    100,
+			CursorCount:  5,
+			NodeCount:    50,
+			NodeDeref:    15,
+			Rebalance:    2,
+			RebalanceTime: 50,
+			Split:        1,
+			Spill:        1,
+			SpillTime:    25,
+			Write:        7,
+			WriteTime:    40,
+		},
+	}
+
+	expected := bolt.Stats{
+		FreePageN:     10,
+		PendingPageN:  5,
+		FreeAlloc:     100,
+		FreelistInuse: 50,
+		TxN:           10,
+		OpenTxN:       3,
+		TxStats: bolt.TxStats{
+			PageCount:    30,
+			PageAlloc:    100,
+			CursorCount:  5,
+			NodeCount:    50,
+			NodeDeref:    15,
+			Rebalance:    3,
+			RebalanceTime: 50,
+			Split:        2,
+			Spill:        1,
+			SpillTime:    25,
+			Write:        8,
+			WriteTime:    40,
+		},
+	}
+
+	result := s.Sub(other)
+
+	if result != expected {
+		t.Errorf("Subtracting stats did not return the expected result")
+	}
+}
+
+func TestStats(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	stats := db.Stats()
+
+	if stats.FreePageN != 0 {
+		t.Errorf("Expected FreePageN to be 0, got %d", stats.FreePageN)
+	}
+
+	if stats.PendingPageN != 0 {
+		t.Errorf("Expected PendingPageN to be 0, got %d", stats.PendingPageN)
+	}
+
+	// Add more assertions for other fields in the Stats struct as needed
+}
+
+func TestUpdate(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("error opening database: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucket([]byte("test"))
+		if err != nil {
+			return err
+		}
+
+		err = bucket.Put([]byte("key"), []byte("value"))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("error updating database: %v", err)
+	}
+
+	// Add more test cases as needed
+}
+

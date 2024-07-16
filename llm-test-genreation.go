@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	boltpackageInfo "llm-test-generation/package_Info/boltdb"
+	fastjsonPackageInfo "llm-test-generation/package_Info/fastjson"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -105,11 +106,10 @@ func extractFunctionLevel_1(filename string, repo string) map[string]string {
 			removeCommentsInFunction(fn)
 			// 打印没有注释的函数
 			funcStr := formatFunction(fn, fset)
-			basePrompt = strings.Replace(boltConfig.testGenerationBasePrompt, "{functionName}", fn.Name.Name, 1)
-			funcStr = basePrompt + funcStr
-			if repo == "boltdb" {
-				funcStr += addOpenAndCloseCode_1(fn.Name.Name)
-			}
+			p := basePrompt
+			p = strings.Replace(p, "{functionName}", fn.Name.Name, 1)
+			funcStr = p + funcStr
+
 			functionList[fn.Name.Name] = funcStr
 		}
 		return true
@@ -152,14 +152,20 @@ func extractFunctionLevel_2(filename string, typeFile string, repo string) map[s
 			funcStr := functionList_1[fn.Name.Name]
 			if paramsTypes, ok := typeMap[fn.Name.Name]; ok {
 				for _, paramsType := range paramsTypes {
-					funcStr += boltpackageInfo.StructMap_2[paramsType]
-					paramsTypeList[paramsType] = true
+					if stuctInfo, ok := fastjsonPackageInfo.StructMap_2[paramsType]; ok {
+						funcStr += stuctInfo
+						paramsTypeList[paramsType] = true
+					}
 				}
 			}
+			funcStr = funcStr + addOptionForBoltdb(repo, paramsTypeList, 2)
 
-			if repo == "boltdb" {
-				funcStr += addOpenAndCloseCode_2(paramsTypeList)
+			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/boltdb/funSig_2.json")
+
+			if repo == "fastjson" {
+				funcStr += fastjsonPackageInfo.Conststr_2
 			}
+
 			functionList[fn.Name.Name] = funcStr
 		}
 		return true
@@ -214,16 +220,23 @@ func extractFunctionLevel_3(filename string, typeFile string, repo string) map[s
 			paramsTypeList := map[string]bool{}
 			if paramsTypes, ok := typeMap[fn.Name.Name]; ok {
 				for _, paramsType := range paramsTypes {
-					funcStr += boltpackageInfo.StructMap_3[paramsType]
-					paramsTypeList[paramsType] = true
+					if stuctInfo, ok := fastjsonPackageInfo.StructMap_2[paramsType]; ok {
+						funcStr += stuctInfo
+						paramsTypeList[paramsType] = true
+					}
 				}
 			}
+			funcStr = funcStr + addOptionForBoltdb(repo, paramsTypeList, 3)
 
-			if repo == "boltdb" {
-				funcStr += addOpenAndCloseCode_3(fn.Name.Name, paramsTypeList)
+			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/boltdb/funSig_3.json")
+
+			if repo == "fastjson" {
+				funcStr += fastjsonPackageInfo.Conststr_3
 			}
-			basePrompt = strings.Replace(boltConfig.testGenerationBasePrompt, "{functionName}", fn.Name.Name, 1)
-			funcStr = basePrompt + funcStr
+
+			p := basePrompt
+			p = strings.Replace(p, "{functionName}", fn.Name.Name, 1)
+			funcStr = p + funcStr
 			functionList[fn.Name.Name] = funcStr
 		}
 		return true
@@ -231,38 +244,50 @@ func extractFunctionLevel_3(filename string, typeFile string, repo string) map[s
 	return functionList
 }
 
-func addOpenAndCloseCode_1(name string) string {
-	if name == "Open" {
-		return boltpackageInfo.CloseCode_1
+func addFunSig(funcName string, sigJson string) string {
+	data, err := os.ReadFile(sigJson)
+	if err != nil {
+		panic(err)
 	}
 
-	if name == "Close" {
-		return boltpackageInfo.OpenCode_1
+	// 解析 JSON 到 map
+	funcs := make(map[string]string)
+	err = json.Unmarshal(data, &funcs)
+	if err != nil {
+		panic(err)
 	}
 
-	return boltpackageInfo.OpenCode_1 + boltpackageInfo.CloseCode_1
+	// 遍历 map 的 values 并拼接成一个字符串
+	var combinedValues string
+	for k, value := range funcs {
+		if k == funcName {
+			continue
+		}
+		combinedValues += value + ", " // 添加空格作为分隔符
+	}
+	return "Here are other function signatures defined in the same source file you may needed, DO NOT generate test functions for them." + combinedValues
 }
 
-func addOpenAndCloseCode_2(paramsTypeList map[string]bool) string {
-	str := ""
-	l := []string{"DB", "Options"}
-	for _, param := range l {
-		if _, ok := paramsTypeList[param]; !ok {
-			str += boltpackageInfo.StructMap_2[param]
-		}
+func addOptionForBoltdb(repo string, paramTypeList map[string]bool, level int) string {
+	if repo != "boltdb" {
+		return ""
 	}
-	return str
-}
 
-func addOpenAndCloseCode_3(name string, paramsTypeList map[string]bool) string {
-	str := addOpenAndCloseCode_1(name)
-	l := []string{"DB", "Options"}
-	for _, param := range l {
-		if _, ok := paramsTypeList[param]; !ok {
-			str += boltpackageInfo.StructMap_3[param]
+	flag := true
+
+	for k := range paramTypeList {
+		if k == "Options" {
+			flag = false
 		}
 	}
-	return str
+	if flag {
+		if level == 2 {
+			return boltpackageInfo.StructMap_2["Options"]
+		} else {
+			return boltpackageInfo.StructMap_3["Options"]
+		}
+	}
+	return ""
 }
 
 func chat(client *openai.Client, prompt string, messages []openai.ChatCompletionMessage) string {
@@ -281,8 +306,8 @@ func chat(client *openai.Client, prompt string, messages []openai.ChatCompletion
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model:    openai.GPT3Dot5Turbo0125,
-			Messages: promptMessages,
+			Model:       openai.GPT3Dot5Turbo0125,
+			Messages:    promptMessages,
 			Temperature: chatGPTemp,
 		},
 	)
@@ -353,7 +378,7 @@ func extractSourceFuntionName(filename string) ([]string, error) {
 	return funcNames, nil
 }
 
-func generateTest(client *openai.Client, sourceCodeList []string, basePrompt string, generatedTestFile string, historyFile string, workers int) {
+func generateTest(client *openai.Client, sourceCodeList []string, generatedTestFile string, historyFile string, workers int) {
 	total := len(sourceCodeList)
 	file, err := os.Create(generatedTestFile)
 	if err != nil {
@@ -458,30 +483,28 @@ func removeFunction(testFile string, errors map[string]string) {
 		panic(err)
 	}
 
-	// 遍历 AST，删除指定的函数
-	ast.Inspect(node, func(n ast.Node) bool {
-		fn, ok := n.(*ast.FuncDecl)
-		if !ok {
-			return true
-		}
-		if _, found := errors[fn.Name.Name]; found {
-			for i, d := range node.Decls {
-				if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == fn.Name.Name {
-					node.Decls = append(node.Decls[:i], node.Decls[i+1:]...)
-					return false
-				}
+	// 初始化一个新的声明列表
+	var newDecls []ast.Decl
+	for _, decl := range node.Decls {
+		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+			if _, found := errors[funcDecl.Name.Name]; found {
+				// 如果函数名在 toDelete 中，跳过此声明
+				continue
 			}
 		}
-		return true
-	})
+		// 将非目标函数添加到新的声明列表中
+		newDecls = append(newDecls, decl)
+	}
+	node.Decls = newDecls
 
-	buf := new(bytes.Buffer)
-	if err := format.Node(buf, fset, node); err != nil {
+	// 创建一个缓冲区并将 AST 输出为 Go 代码
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, node); err != nil {
 		panic(err)
 	}
 
-	err = os.WriteFile(testFile, buf.Bytes(), 0644)
-	if err != nil {
+	// 将修改后的代码写回原始文件
+	if err := os.WriteFile(testFile, buf.Bytes(), 0644); err != nil {
 		panic(err)
 	}
 }
@@ -492,8 +515,9 @@ func repairFailing(client *openai.Client, historyFile string, errorFile string, 
 		panic(err)
 	}
 	errorJson := loadErrorJson(errorFile)
+	removeFunction(testFilePath, errorJson)
+
 	errors := integration(errorJson, histories)
-	removeFunction(testFilePath, errors)
 
 	var mutex sync.Mutex
 	wg := sync.WaitGroup{}
@@ -653,7 +677,7 @@ func repairCompilation(client *openai.Client, historyFile string, errorFile stri
 	fmt.Println("empty function", len(emptyFunctions))
 
 	for _, emptyFunction := range emptyFunctions {
-		errorJson[emptyFunction] = fmt.Sprintf("The function %s is empty, re-generate it again", emptyFunction)
+		errorJson[emptyFunction] = fmt.Sprintf("The function %s is empty, re-generate it again ", emptyFunction)
 	}
 
 	modify_duplicated("duplicated.json", &histories)

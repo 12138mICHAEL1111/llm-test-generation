@@ -1,0 +1,79 @@
+func TestIsReadOnly(t *testing.T) {
+	// Create a new DB instance
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
+	// Check if the database is initially read-only
+	if db.IsReadOnly() {
+		t.Errorf("Expected database to not be read-only, but it is")
+	}
+
+	// Use reflection to set the database to read-only mode
+	reflect.ValueOf(db).Elem().FieldByName("readOnly").SetBool(true)
+
+	// Check if the database is now read-only
+	if !db.IsReadOnly() {
+		t.Errorf("Expected database to be read-only, but it is not")
+	}
+}
+func TestSub(t *testing.T) {
+	// Create two Stats objects to calculate the difference between
+	stats1 := &bolt.Stats{
+		FreePageN:     10,
+		PendingPageN:  5,
+		FreeAlloc:     100,
+		FreelistInuse: 50,
+		TxN:           20,
+		TxStats: bolt.TxStats{
+			PageCount:    5,
+			PageAlloc:    200,
+			CursorCount:  3,
+			NodeCount:    10,
+			NodeDeref:    15,
+			Rebalance:    2,
+			RebalanceTime: 1000,
+			Split:        3,
+			Spill:        1,
+			SpillTime:    500,
+			Write:        8,
+			WriteTime:    600,
+		},
+	}
+
+	stats2 := &bolt.Stats{
+		FreePageN:     5,
+		PendingPageN:  2,
+		FreeAlloc:     50,
+		FreelistInuse: 20,
+		TxN:           15,
+		TxStats: bolt.TxStats{
+			PageCount:    2,
+			PageAlloc:    100,
+			CursorCount:  2,
+			NodeCount:    5,
+			NodeDeref:    10,
+			Rebalance:    1,
+			RebalanceTime: 500,
+			Split:        2,
+			Spill:        1,
+			SpillTime:    200,
+			Write:        5,
+			WriteTime:    300,
+		},
+	}
+
+	// Calculate the difference between the two Stats objects
+	diff := stats1.Sub(stats2)
+
+	// Verify the values of the difference Stats object
+	if diff.FreePageN != 5 || diff.PendingPageN != 3 || diff.FreeAlloc != 50 || diff.FreelistInuse != 30 || diff.TxN != 5 {
+		t.Errorf("Unexpected difference in basic stats")
+	}
+
+	if diff.TxStats.PageCount != 3 || diff.TxStats.PageAlloc != 100 || diff.TxStats.CursorCount != 1 || diff.TxStats.NodeCount != 5 || diff.TxStats.NodeDeref != 5 || diff.TxStats.Rebalance != 1 || diff.TxStats.RebalanceTime != 500 || diff.TxStats.Split != 1 || diff.TxStats.Spill != 0 || diff.TxStats.SpillTime != 300 || diff.TxStats.Write != 3 || diff.TxStats.WriteTime != 300 {
+		t.Errorf("Unexpected difference in TxStats")
+	}
+}

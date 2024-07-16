@@ -1,0 +1,160 @@
+{
+    "Add": [
+        "float64"
+    ],
+    "AddConst": [
+        "float64"
+    ],
+    "AddScaled": [
+        "float64"
+    ],
+    "AddScaledTo": [
+        "float64"
+    ],
+    "AddTo": [
+        "float64"
+    ],
+    "Argsort": [
+        "float64",
+        "int"
+    ],
+    "ArgsortStable": [
+        "float64",
+        "int"
+    ],
+    "Count": [
+        "need manual",
+        "float64",
+        "int"
+    ],
+    "CumProd": [
+        "float64"
+    ],
+    "CumSum": [
+        "float64"
+    ],
+    "Distance": [
+        "float64"
+    ],
+    "Div": [
+        "float64"
+    ],
+    "DivTo": [
+        "float64"
+    ],
+    "Dot": [
+        "float64"
+    ],
+    "Equal": [
+        "float64",
+        "bool"
+    ],
+    "EqualApprox": [
+        "float64",
+        "bool"
+    ],
+    "EqualFunc": [
+        "float64",
+        "need manual",
+        "bool"
+    ],
+    "EqualLengths": [
+        "",
+        "bool"
+    ],
+    "Find": [
+        "int",
+        "need manual",
+        "float64",
+        "error"
+    ],
+    "HasNaN": [
+        "float64",
+        "bool"
+    ],
+    "Len": [
+        "argsort",
+        "int"
+    ],
+    "Less": [
+        "argsort",
+        "int",
+        "bool"
+    ],
+    "LogSpan": [
+        "float64"
+    ],
+    "LogSumExp": [
+        "float64"
+    ],
+    "Max": [
+        "float64"
+    ],
+    "MaxIdx": [
+        "float64",
+        "int"
+    ],
+    "Min": [
+        "float64"
+    ],
+    "MinIdx": [
+        "float64",
+        "int"
+    ],
+    "Mul": [
+        "float64"
+    ],
+    "MulTo": [
+        "float64"
+    ],
+    "NearestIdx": [
+        "float64",
+        "int"
+    ],
+    "NearestIdxForSpan": [
+        "int",
+        "float64"
+    ],
+    "Norm": [
+        "float64"
+    ],
+    "Prod": [
+        "float64"
+    ],
+    "Reverse": [
+        "float64"
+    ],
+    "Same": [
+        "float64",
+        "bool"
+    ],
+    "Scale": [
+        "float64"
+    ],
+    "ScaleTo": [
+        "float64"
+    ],
+    "Span": [
+        "float64"
+    ],
+    "Sub": [
+        "float64"
+    ],
+    "SubTo": [
+        "float64"
+    ],
+    "Sum": [
+        "float64"
+    ],
+    "SumCompensated": [
+        "float64"
+    ],
+    "Swap": [
+        "argsort",
+        "int"
+    ],
+    "Within": [
+        "float64",
+        "int"
+    ]
+}

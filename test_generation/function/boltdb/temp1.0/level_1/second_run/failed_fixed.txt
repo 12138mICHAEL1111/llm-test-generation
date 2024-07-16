@@ -1,0 +1,36 @@
+func TestInfo(t *testing.T) {
+	db, _ := bolt.Open("", 0644, nil) // open a new bolt database
+	defer db.Close() // close the database after the test
+
+	info := db.Info() // call Info function
+
+	// Add test cases here to verify the output of the Info function
+	// For example:
+	// if info.SomeField != ExpectedValue {
+	// 	 t.Errorf("Info() returned incorrect value for SomeField. Expected: %v, Got: %v", ExpectedValue, info.SomeField)
+	// }
+}
+func TestIsReadOnly(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Test when database is not read-only
+	if db.IsReadOnly() {
+		t.Errorf("Expected database to not be read-only, but it is")
+	}
+
+	// Test when database is set to read-only
+	db.Close()
+	db, err = bolt.Open("test.db", 0400, nil) // Open the database in read-only mode
+	if err != nil {
+		t.Fatalf("Failed to open read-only database: %v", err)
+	}
+	defer db.Close()
+
+	if db.IsReadOnly() == false {
+		t.Errorf("Expected database to be read-only, but it is not")
+	}
+}
