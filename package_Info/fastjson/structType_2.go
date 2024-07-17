@@ -1,27 +1,29 @@
 package fastjsonPackageInfo
 
 var StructMap_2 map[string]string = map[string]string{
-	"Object": `type Object struct {
-	kvs           []kv
-	keysUnescaped bool
-}`,
-	"Value": `type Value struct {
-	o Object
-	a []*Value
-	s string
-	t Type
-}`,
-	"Parser": `type Parser struct {
+	"Parser": `
+type Parser struct {
 	b []byte
 	c cache
 }`,
-	"cache": `
-type cache struct {
+	"cache": `type cache struct {
 	vs []Value
 }`,
 	"kv": `type kv struct {
 	k string
 	v *Value
+}`,
+	"Object": `
+type Object struct {
+	kvs           []kv
+	keysUnescaped bool
+}`,
+	"Value": `
+type Value struct {
+	o Object
+	a []*Value
+	s string
+	t Type
 }`,
 }
 

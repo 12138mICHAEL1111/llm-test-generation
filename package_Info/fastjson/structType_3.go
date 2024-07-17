@@ -28,6 +28,9 @@ type Parser struct {
 type Object struct {
 	kvs           []kv
 	keysUnescaped bool
+},type kv struct {
+	k string
+	v *Value
 }`,
 	"Value": `// Value represents any JSON value.
 //

@@ -1,105 +1,146 @@
 {
     "Array": [
         "Value",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Bool": [
         "Value",
         "bool",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Exists": [
         "Value",
         "",
-        "bool"
+        "bool",
+        "Object",
+        "kv"
     ],
     "Float64": [
         "Value",
         "float64",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Get": [
         "Value",
-        ""
+        "",
+        "Object",
+        "kv"
     ],
     "GetArray": [
         "Value",
-        ""
+        "",
+         "Object",
+        "kv"
     ],
     "GetBool": [
         "Value",
         "",
-        "bool"
+        "bool",
+        "Object",
+        "kv"
     ],
     "GetFloat64": [
         "Value",
         "",
-        "float64"
+        "float64",
+        "Object",
+        "kv"
     ],
     "GetInt": [
         "Value",
         "",
-        "int"
+        "int",
+        "Object",
+        "kv"
     ],
     "GetInt64": [
         "Value",
         "",
-        "int64"
+        "int64",
+        "Object",
+        "kv"
     ],
     "GetObject": [
         "Value",
         "",
-        "Object"
+        "Object",
+        "kv"
     ],
     "GetStringBytes": [
         "Value",
         "",
-        "byte"
+        "byte",
+        "Object",
+        "kv"
     ],
     "GetUint": [
         "Value",
         "",
-        "uint"
+        "uint",
+        "Object",
+        "kv"
     ],
     "GetUint64": [
         "Value",
         "",
-        "uint64"
+        "uint64",
+        "Object",
+        "kv"
     ],
     "Int": [
         "Value",
         "int",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Int64": [
         "Value",
         "int64",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Len": [
         "Object",
-        "int"
+        "int",
+        "kv"
     ],
     "MarshalTo": [
         "Value",
-        "byte"
+        "byte",
+        "Object",
+        "kv"
     ],
     "Object": [
         "Value",
         "Object",
-        "error"
+        "error",
+        "kv"
     ],
     "Parse": [
         "Parser",
         "string",
         "Value",
-        "error"
+        "cache",
+        "error",
+        "Object",
+        "kv"
     ],
     "ParseBytes": [
         "Parser",
-        "byte",
+        "string",
         "Value",
-        "error"
+        "cache",
+        "error",
+        "Object",
+        "kv"
     ],
     "String": [
         "Type",
@@ -108,25 +149,35 @@
     "StringBytes": [
         "Value",
         "byte",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Type": [
         "Value",
-        "Type"
+        "Type",
+        "Object",
+        "kv"
     ],
     "Uint": [
         "Value",
         "uint",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Uint64": [
         "Value",
         "uint64",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "Visit": [
         "Object",
-        "need manual"
+        "Value",
+        "Object",
+        "kv"
     ],
     "escapeString": [
         "byte",
@@ -138,7 +189,9 @@
     ],
     "getValue": [
         "cache",
-        "Value"
+        "Value",
+        "Object",
+        "kv"
     ],
     "hasSpecialChars": [
         "string",
@@ -149,14 +202,18 @@
         "cache",
         "int",
         "Value",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "parseObject": [
         "string",
         "cache",
         "int",
         "Value",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "parseRawKey": [
         "string",
@@ -175,10 +232,13 @@
         "cache",
         "int",
         "Value",
-        "error"
+        "error",
+        "Object",
+        "kv"
     ],
     "reset": [
-        "Object"
+        "Object",
+        "kv"
     ],
     "skipWS": [
         "string"
@@ -187,7 +247,8 @@
         "string"
     ],
     "unescapeKeys": [
-        "Object"
+        "Object",
+        "kv"
     ],
     "unescapeStringBestEffort": [
         "string"

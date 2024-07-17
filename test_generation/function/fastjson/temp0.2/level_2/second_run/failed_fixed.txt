@@ -1,0 +1,372 @@
+func TestExists(t *testing.T) {
+	v := &Value{
+		o: Object{
+			kvs: []kv{
+				{
+					k: "key1",
+					v: &Value{},
+				},
+			},
+			keysUnescaped: true,
+		},
+	}
+
+	if !v.Exists("key1") {
+		t.Errorf("Expected key1 to exist, but it does not")
+	}
+
+	if v.Exists("key2") {
+		t.Errorf("Expected key2 to not exist, but it does")
+	}
+}
+func TestParseBytes(t *testing.T) {
+	p := &Parser{}
+	input := []byte(`{"key":"value"}`)
+	expected := &Value{
+		o: Object{
+			kvs: []kv{
+				{
+					k: "key",
+					v: &Value{
+						s: "value",
+						t: TypeString,
+					},
+				},
+			},
+			keysUnescaped: false,
+		},
+		t: TypeObject,
+	}
+	result, err := p.ParseBytes(input)
+
+	if err != nil {
+		t.Errorf("ParseBytes returned an error: %v", err)
+	}
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("ParseBytes did not return the expected result. Got: %v, Expected: %v", result, expected)
+	}
+}
+func TestSkipWSSlow(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"   hello", "   hello"},
+		{"\n\tworld", "\n\tworld"},
+		{"\rtest", "\rtest"},
+		{"  \n  \t\rtext", "text"},
+		{"", ""},
+		{"abc", "abc"},
+	}
+
+	for _, test := range tests {
+		result := skipWSSlow(test.input)
+		if result != test.expected {
+			t.Errorf("skipWSSlow(%v) = %v; want %v", test.input, result, test.expected)
+		}
+	}
+}
+func TestEscapeString(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{input: "", expected: `""`},
+		{input: "abc", expected: `"abc"`},
+		{input: "\"", expected: `"\\"`},
+		{input: "abc\"", expected: `"abc\""`},
+	}
+
+	for _, tc := range testCases {
+		var dst []byte
+		result := escapeString(dst, tc.input)
+		if string(result) != tc.expected {
+			t.Errorf("Failed for input: %s, expected: %s, got: %s", tc.input, tc.expected, string(result))
+		}
+	}
+}
+func TestValue_GetArray(t *testing.T) {
+	v := &Value{
+		t: TypeArray,
+		a: []*Value{
+			{t: TypeString, s: "apple"},
+			{t: TypeString, s: "banana"},
+			{t: TypeString, s: "orange"},
+		},
+	}
+
+	// Test case where keys are provided for array
+	keys := []string{}
+	result := v.GetArray(keys...)
+	expected := []*Value{
+		{t: TypeString, s: "apple"},
+		{t: TypeString, s: "banana"},
+		{t: TypeString, s: "orange"},
+	}
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Expected %v, but got %v", expected, result)
+	}
+
+	// Test case where keys are not valid
+	keys = []string{"fruits"}
+	result = v.GetArray(keys...)
+	if result != nil {
+		t.Errorf("Expected nil, but got %v", result)
+	}
+
+	// Test case where v is nil
+	v = nil
+	keys = []string{"fruits"}
+	result = v.GetArray(keys...)
+	if result != nil {
+		t.Errorf("Expected nil, but got %v", result)
+	}
+}
+func TestValue_GetInt(t *testing.T) {
+	value := &Value{s: "123"}
+	result := value.GetInt()
+	if result != 123 {
+		t.Errorf("GetInt() = %d; want 123", result)
+	}
+	
+	value2 := &Value{s: "abc"}
+	result2 := value2.GetInt()
+	if result2 != 0 {
+		t.Errorf("GetInt() = %d; want 0", result2)
+	}
+}
+func TestValue_Int(t *testing.T) {
+	// Test cases
+	tests := []struct {
+		input string
+		want  int
+		err   bool
+	}{
+		{"123", 123, false},
+		{"-456", -456, false},
+		{"notanumber", 0, true},
+		{"999999999999999999999999999999999999999999999999", 0, true}, // Number too large for int
+	}
+
+	// Run tests
+	for _, test := range tests {
+		value := &Value{s: test.input} // Initialize Value object with input value
+		got, err := value.Int()
+
+		if test.err && err == nil {
+			t.Errorf("Input: %s - Expected error but none occurred", test.input)
+		}
+
+		if !test.err && err != nil {
+			t.Errorf("Input: %s - Expected no error but got: %v", test.input, err)
+		}
+
+		if got != test.want {
+			t.Errorf("Input: %s - Expected: %d, Got: %d", test.input, test.want, got)
+		}
+	}
+}
+func TestValue_GetUint64(t *testing.T) {
+	value := &Value{s: "123"}
+	result := value.GetUint64()
+	assert.Equal(t, uint64(123), result)
+
+	value = &Value{t: TypeNumber, s: "456"}
+	result = value.GetUint64()
+	assert.Equal(t, uint64(456), result)
+
+	value = &Value{t: TypeString, s: "abc"}
+	result = value.GetUint64()
+	assert.Equal(t, uint64(0), result)
+
+	value = nil
+	result = value.GetUint64()
+	assert.Equal(t, uint64(0), result)
+}
+func TestParseRawNumber(t *testing.T) {
+	tests := []struct {
+		input       string
+		expectedNs  string
+		expectedRem string
+		expectedErr error
+	}{
+		{input: "123.456", expectedNs: "123.456", expectedRem: "", expectedErr: nil},
+		{input: "-789.0E+24", expectedNs: "-789.0E+24", expectedRem: "", expectedErr: nil},
+		{input: "NaN", expectedNs: "", expectedRem: "", expectedErr: fmt.Errorf("unexpected char: %q", "N")},
+		{input: "invalid", expectedNs: "", expectedRem: "invalid", expectedErr: fmt.Errorf("unexpected char: %q", "i")},
+	}
+
+	for _, test := range tests {
+		ns, rem, err := parseRawNumber(test.input)
+
+		if ns != test.expectedNs {
+			t.Errorf("For input %q, expected ns: %q, got: %q", test.input, test.expectedNs, ns)
+		}
+
+		if rem != test.expectedRem {
+			t.Errorf("For input %q, expected rem: %q, got: %q", test.input, test.expectedRem, rem)
+		}
+
+		if err == nil && test.expectedErr == nil {
+			continue
+		}
+
+		if err == nil || test.expectedErr == nil || err.Error() != test.expectedErr.Error() {
+			t.Errorf("For input %q, expected err: %v, got: %v", test.input, test.expectedErr, err)
+		}
+	}
+}
+func TestGetObject(t *testing.T) {
+	// Create a test Value with an Object for testing
+	v := &Value{
+		o: Object{
+			kvs: []kv{
+				{"key1", &Value{s: "value1", t: TypeString}},
+				{"key2", &Value{s: "value2", t: TypeString}},
+			},
+		},
+		t: TypeObject,
+	}
+
+	// Test GetObject function with valid keys
+	obj := v.GetObject("key1", "key2")
+	if obj == nil {
+		t.Error("Expected Object, got nil")
+	}
+
+	// Test GetObject function with invalid keys
+	invalidObj := v.GetObject("key1", "key3")
+	if invalidObj != nil {
+		t.Error("Expected nil, got Object")
+	}
+
+	// Test GetObject function with empty keys
+	emptyObj := v.GetObject()
+	if emptyObj == nil {
+		t.Error("Expected Object, got nil")
+	}
+}
+func TestParseArray(t *testing.T) {
+	c := &cache{}
+	depth := 0
+
+	t.Run("EmptyArray", func(t *testing.T) {
+		s := "[]"
+		v, remaining, err := parseArray(s, c, depth)
+
+		if err != nil {
+			t.Errorf("Expected no error, but got: %v", err)
+		}
+
+		if v == nil {
+			t.Error("Expected a non-nil Value, but got nil")
+		} else {
+			if len(v.a) != 0 { 
+                            t.Error("Expected an empty array, but got non-empty array")
+                        }
+			if v.t != TypeArray { 
+                            t.Error("Expected TypeArray, but got ", v.t)
+                        }
+		}
+
+		if remaining != "" {
+			t.Errorf("Expected empty remaining string, but got: %s", remaining)
+		}
+	})
+
+	// Add more test cases covering different scenarios
+}
+func TestSkipWS(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{input: "   hello", expected: "hello"},
+		{input: "\nworld", expected: "world"},
+		{input: "\t\tgoodbye", expected: "goodbye"},
+		{input: "", expected: ""},
+		{input: "normal", expected: "normal"},
+	}
+
+	for _, test := range tests {
+		result := skipWS(test.input)
+		if result != test.expected {
+			t.Errorf("skipWS(%s) = %s; want %s", test.input, result, test.expected)
+		}
+	}
+}
+func TestParseRawString(t *testing.T) {
+	type testCase struct {
+		input       string
+		expected1   string
+		expected2   string
+		expectedErr bool
+	}
+
+	testCases := []testCase{
+		{input: `"abc\"def"rest`, expected1: "abc\"def", expected2: "rest", expectedErr: false},
+		{input: `"no closing quote`, expected1: "", expected2: "", expectedErr: true},
+	}
+
+	for _, tc := range testCases {
+		result1, result2, err := parseRawString(tc.input)
+
+		if (err != nil) != tc.expectedErr {
+			t.Errorf("Error mismatch for input '%s'. Expected: %v, Got: %v", tc.input, tc.expectedErr, err != nil)
+		}
+
+		if result1 != tc.expected1 || result2 != tc.expected2 {
+			t.Errorf("Results mismatch for input '%s'. Expected: %s, %s, Got: %s, %s", tc.input, tc.expected1, tc.expected2, result1, result2)
+		}
+	}
+}
+func TestParseRawKey(t *testing.T) {
+	tests := []struct {
+		input          string
+		expectedBefore string
+		expectedAfter  string
+		expectError    bool
+	}{
+		{input: `"key":"value"`, expectedBefore: "key", expectedAfter: ":\"value\"", expectError: false},
+		{input: `\"key":"value"`, expectedBefore: `key`, expectedAfter: `:"value"`, expectError: false},
+		{input: `missing`, expectedBefore: `missing`, expectedAfter: ``, expectError: true},
+	}
+
+	for _, test := range tests {
+		before, after, err := parseRawKey(test.input)
+
+		if before != test.expectedBefore || after != test.expectedAfter {
+			t.Errorf("For input: %s, expected: (%s, %s), got: (%s, %s)", test.input, test.expectedBefore, test.expectedAfter, before, after)
+		}
+
+		if test.expectError && err == nil {
+			t.Errorf("For input: %s, expected an error but got none", test.input)
+		}
+
+		if !test.expectError && err != nil {
+			t.Errorf("For input: %s, expected no error but got: %v", test.input, err)
+		}
+	}
+}
+func TestUnescapeStringBestEffort(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`Hello\nWorld`, "Hello\nWorld"},
+		{`This is a \"test\" string`, `This is a "test" string`},
+		{`Unicode \u00A9 example`, "Unicode © example"},
+		{`Escaped backslash \\`, `Escaped backslash \`},
+		{`New line \n tab \t`, "New line \n tab \t"},
+		{`Edge case: Invalid escape sequence \q`, `Edge case: Invalid escape sequence \q`},
+	}
+
+	for _, test := range tests {
+		result := unescapeStringBestEffort(test.input)
+		if result != test.expected {
+			t.Errorf("Unexpected result. Input: %s, Expected: %s, Got: %s", test.input, test.expected, result)
+		}
+	}
+}

@@ -3,7 +3,7 @@ package main
 const (
 	compilationBasePrompt string  = "The code you generated has compilation faults, fix them. "
 	failedTestBasePrompt  string  = "The code you generated failed to pass test, fix them to pass the test. "
-	chatGPTemp            float32 = 0.2
+	chatGPTemp            float32 = 1.0
 )
 
 type filepathConfig struct {
