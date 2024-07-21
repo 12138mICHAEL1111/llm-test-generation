@@ -1,0 +1,911 @@
+func TestDivTo(t *testing.T) {
+	// write your test cases for DivTo function here
+	// make sure to test different scenarios including edge cases
+}
+
+func TestMin(t *testing.T) {
+	tests := []struct {
+		input    []float64
+		expected float64
+	}{
+		{[]float64{1.0, 2.0, 3.0, 4.0}, 1.0},
+		{[]float64{-1.0, -2.0, -3.0, -4.0}, -4.0},
+		{[]float64{5.5, 2.2, 7.7, 1.1}, 1.1},
+	}
+
+	for _, test := range tests {
+		result := Min(test.input)
+		if result != test.expected {
+			t.Errorf("Min(%v) = %v; want %v", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestEqualFunc(t *testing.T) {
+	s1 := []float64{1.1, 2.2, 3.3}
+	s2 := []float64{1.1, 2.2, 3.3}
+
+	result := EqualFunc(s1, s2, func(a, b float64) bool {
+		return a == b
+	})
+
+	if !result {
+		t.Error("Expected true, got false")
+	}
+}
+
+func TestEqualFunc_WithUnequalSlices(t *testing.T) {
+	s1 := []float64{1.1, 2.2, 3.3}
+	s2 := []float64{1.1, 2.2}
+
+	result := EqualFunc(s1, s2, func(a, b float64) bool {
+		return a == b
+	})
+
+	if result {
+		t.Error("Expected false, got true")
+	}
+}
+
+func TestEqualFunc_WithCustomComparison(t *testing.T) {
+	s1 := []float64{1.1, 2.2, 3.3}
+	s2 := []float64{1.1, 2.2, 3.300001}
+
+	result := EqualFunc(s1, s2, func(a, b float64) bool {
+		epsilon := 0.0001 // Define an epsilon for floating point comparison
+		return a >= b-epsilon && a <= b+epsilon
+	})
+
+	if !result {
+		t.Error("Expected true, got false")
+	}
+}
+
+func TestDistance(t *testing.T) {
+	t.Run("Testing L2 Distance", func(t *testing.T) {
+		s := []float64{1, 2, 3}
+		t := []float64{4, 5, 6}
+		L := 2.0
+		expected := 5.196152422706632
+		result := Distance(s, t, L)
+
+		if !reflect.DeepEqual(result, expected) {
+			t.Errorf("Expected %f but got %f", expected, result)
+		}
+	})
+
+	t.Run("Testing L1 Distance", func(t *testing.T) {
+		s := []float64{1, 2, 3}
+		t := []float64{4, 5, 6}
+		L := 1.0
+		expected := 9.0
+		result := Distance(s, t, L)
+
+		if !reflect.DeepEqual(result, expected) {
+			t.Errorf("Expected %f but got %f", expected, result)
+		}
+	})
+
+	t.Run("Testing Infinity Distance", func(t *testing.T) {
+		s := []float64{1, 2, 3}
+		t := []float64{4, 5, 6}
+		L := math.Inf(1)
+		expected := 3.0
+		result := Distance(s, t, L)
+
+		if !reflect.DeepEqual(result, expected) {
+			t.Errorf("Expected %f but got %f", expected, result)
+		}
+	})
+}
+
+func TestMaxIdx(t *testing.T) {
+	tests := []struct {
+		input []float64
+		want  int
+	}{
+		{[]float64{1.0, 2.0, 3.0, 4.0, 5.0}, 4},
+		{[]float64{5.0, 4.0, 3.0, 2.0, 1.0}, 0},
+		{[]float64{5.0, 3.0, 4.0, 2.0, 1.0}, 0},
+		{[]float64{1.0, 3.0, 2.0, 5.0, 4.0}, 3},
+		{[]float64{3.0, 3.0, 3.0, 3.0, 3.0}, 0},
+	}
+
+	for _, test := range tests {
+		got := MaxIdx(test.input)
+		if got != test.want {
+			t.Errorf("MaxIdx(%v) = %v; want %v", test.input, got, test.want)
+		}
+	}
+}
+
+func TestFind(t *testing.T) {
+	tests := []struct {
+		inds   []int
+		f      func(float64) bool
+		s      []float64
+		k      int
+		result []int
+		err    error
+	}{
+		{
+			inds:   []int{3, 5, 7},
+			f:      func(x float64) bool { return x > 5 },
+			s:      []float64{4.2, 6.7, 8.1, 3.2, 5.6},
+			k:      2,
+			result: []int{2, 4},
+			err:    nil,
+		},
+		{
+			inds:   []int{},
+			f:      func(x float64) bool { return x < 0 },
+			s:      []float64{1.2, 3.4, 5.6, 7.8},
+			k:      3,
+			result: []int{0, 1, 2},
+			err:    errors.New("floats: insufficient elements found"),
+		},
+		// Add more test cases as needed
+	}
+
+	for _, test := range tests {
+		inds, err := Find(test.inds, test.f, test.s, test.k)
+
+		if !reflect.DeepEqual(inds, test.result) || !reflect.DeepEqual(err, test.err) {
+			t.Errorf("Find(%v, %v, %v, %d) = %v, %v, want %v, %v",
+				test.inds, test.f, test.s, test.k, inds, err, test.result, test.err)
+		}
+	}
+}
+
+func TestNearestIdx(t *testing.T) {
+	tests := []struct {
+		s         []float64
+		v         float64
+		expected  int
+	}{
+		{[]float64{1.0, 2.0, 3.0, 4.0, 5.0}, 2.5, 1},
+		{[]float64{10.0, 20.0, 30.0, 40.0, 50.0}, 17.5, 0},
+		{[]float64{1.0, 2.0, 3.0, 4.0, 5.0}, 3.0, 2},
+	}
+
+	for _, test := range tests {
+		output := NearestIdx(test.s, test.v)
+		if output != test.expected {
+			t.Errorf("Test failed for input s: %v, v: %v. Expected: %d, Got: %d", test.s, test.v, test.expected, output)
+		}
+	}
+}
+
+func TestHasNaN(t *testing.T) {
+	tests := []struct {
+		input []float64
+		want  bool
+	}{
+		{[]float64{1.0, 2.5, 3.6}, false},
+		{[]float64{1.0, 2.5, math.NaN()}, true},
+		{[]float64{math.NaN(), math.NaN(), math.NaN()}, true},
+	}
+
+	for _, test := range tests {
+		got := HasNaN(test.input)
+		if got != test.want {
+			t.Errorf("HasNaN(%v) = %t, want %t", test.input, got, test.want)
+		}
+	}
+}
+
+func TestNearestIdxForSpan(t *testing.T) {
+	// Add test cases here
+}
+
+func TestAdd(t *testing.T) {
+	// Add your test cases for the Add function here
+}
+
+func TestScale(t *testing.T) {
+	dst := make([]float64, 5)
+	for i := range dst {
+		dst[i] = rand.Float64()
+	}
+
+	Scale(2.0, dst)
+
+	for _, val := range dst {
+		if val != 0 && val != 2.0 {
+			t.Errorf("Expected element to be either 0 or 2.0, got %f", val)
+		}
+	}
+}
+
+func TestCumProd(t *testing.T) {
+	tests := []struct {
+		dst  []float64
+		s    []float64
+		want []float64
+	}{
+		{[]float64{1, 2, 3}, []float64{4, 5, 6}, []float64{4, 10, 18}},
+		{[]float64{10, 20, 30}, []float64{2, 3, 4}, []float64{20, 60, 120}},
+		{[]float64{}, []float64{}, []float64{}},
+	}
+
+	for _, tt := range tests {
+		got := CumProd(tt.dst, tt.s)
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("CumProd(%v, %v) = %v, want %v", tt.dst, tt.s, got, tt.want)
+		}
+	}
+}
+
+func TestEqual(t *testing.T) {
+	tests := []struct {
+		slice1 []float64
+		slice2 []float64
+		expected bool
+	}{
+		{[]float64{1.0, 2.0, 3.0}, []float64{1.0, 2.0, 3.0}, true},
+		{[]float64{1.0, 2.0, 3.0}, []float64{1.0, 2.0, 4.0}, false},
+		{[]float64{1.0, 2.0, 3.0}, []float64{1.0, 2.0}, false},
+		{[]float64{}, []float64{}, true},
+		{nil, nil, true},
+		{[]float64{1.1, 2.2, 3.3}, []float64{1.1, 2.2, 3.3}, true},
+	}
+
+	for _, test := range tests {
+		if result := Equal(test.slice1, test.slice2); result != test.expected {
+			t.Errorf("Expected Equal(%v, %v) to be %t, but got %t", test.slice1, test.slice2, test.expected, result)
+		}
+	}
+}
+
+func TestReverse(t *testing.T) {
+	testCases := []struct {
+		input    []float64
+		expected []float64
+	}{
+		{[]float64{1.1, 2.2, 3.3}, []float64{3.3, 2.2, 1.1}},
+		{[]float64{4.4, 5.5, 6.6, 7.7}, []float64{7.7, 6.6, 5.5, 4.4}},
+		{[]float64{8.8}, []float64{8.8}},
+		{[]float64{}, []float64{}},
+	}
+
+	for _, tc := range testCases {
+		input := make([]float64, len(tc.input))
+		copy(input, tc.input)
+
+		Reverse(input)
+
+		if !reflect.DeepEqual(input, tc.expected) {
+			t.Errorf("Reverse(%v) = %v, want %v", tc.input, input, tc.expected)
+		}
+	}
+}
+
+func TestEqualLengths(t *testing.T) {
+	tests := []struct {
+		input    [][]float64
+		expected bool
+	}{
+		{[][]float64{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}}, true},
+		{[][]float64{{1.0, 2.0, 3.0}, {4.0, 5.0}}, false},
+		{[][]float64{}, true},
+	}
+
+	for _, test := range tests {
+		result := EqualLengths(test.input...)
+		if result != test.expected {
+			t.Errorf("Expected EqualLengths(%v) to be %v, but got %v", test.input, test.expected, result)
+		}
+	}
+}
+
+func TestDiv(t *testing.T) {
+	dst := []float64{10.0, 20.0, 30.0}
+	s := []float64{2.0, 5.0, 10.0}
+
+	Div(dst, s)
+
+	expected := []float64{5.0, 4.0, 3.0}
+
+	for i := 0; i < len(dst); i++ {
+		if dst[i] != expected[i] {
+			t.Errorf("Div calculation incorrect, got: %v, want: %v", dst[i], expected[i])
+		}
+	}
+}
+
+func TestSum(t *testing.T) {
+	tests := []struct {
+		input    []float64
+		expected float64
+	}{
+		{[]float64{1.0, 2.0, 3.0}, 6.0},
+		{[]float64{4.5, 2.3, 1.2}, 7.0},
+		{[]float64{}, 0.0},
+		{[]float64{0.5, 0.5, 0.5}, 1.5},
+	}
+
+	for _, test := range tests {
+		result := Sum(test.input)
+		if result != test.expected {
+			t.Errorf("Sum(%v) = %f; want %f", test.input, result, test.expected)
+		}
+	}
+}
+
+func TestMulTo(t *testing.T) {
+	dst := make([]float64, 3)
+	s := []float64{1.0, 2.0, 3.0}
+	t := []float64{4.0, 5.0, 6.0}
+
+	expected := []float64{4.0, 10.0, 18.0}
+	result := MulTo(dst, s, t)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Multiplication result incorrect, expected: %v, got: %v", expected, result)
+	}
+}
+
+func TestMax(t *testing.T) {
+	testCases := []struct {
+		input    []float64
+		expected float64
+	}{
+		{[]float64{1.2, 3.4, 5.6}, 5.6},
+		{[]float64{8.9, 4.5, 2.3}, 8.9},
+		{[]float64{0.0, 0.0, 0.0}, 0.0},
+	}
+
+	for _, tc := range testCases {
+		result := Max(tc.input)
+		if result != tc.expected {
+			t.Errorf("Expected Max(%v) to be %f, but got %f", tc.input, tc.expected, result)
+		}
+	}
+}
+
+func TestAddScaled(t *testing.T) {
+	// Add your test cases for the AddScaled function here
+}
+
+func TestMinIdx(t *testing.T) {
+	tests := []struct {
+		input []float64
+		want  int
+	}{
+		{[]float64{1.0, 2.0, 3.0}, 0},
+		{[]float64{3.0, 2.0, 1.0}, 2},
+		{[]float64{5.0, 3.0, 7.0, 2.0, 9.0}, 3},
+		{[]float64{}, 0},
+		{[]float64{math.NaN(), math.NaN(), math.NaN()}, 0},
+	}
+
+	for _, test := range tests {
+		got := MinIdx(test.input)
+		if got != test.want {
+			t.Errorf("MinIdx(%v) = %v; want %v", test.input, got, test.want)
+		}
+	}
+}
+
+func TestLogSpan(t *testing.T) {
+	tests := []struct {
+		name string
+		dst  []float64
+		l    float64
+		u    float64
+		want []float64
+	}{
+		{
+			name: "Test LogSpan with positive values",
+			dst:  make([]float64, 3),
+			l:    1.0,
+			u:    10.0,
+			want: []float64{1.0, 3.1622776601683795, 10.0},
+		},
+		{
+			name: "Test LogSpan with negative values",
+			dst:  make([]float64, 3),
+			l:    -1.0,
+			u:    -10.0,
+			want: []float64{-1.0, -3.1622776601683795, -10.0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := LogSpan(tt.dst, tt.l, tt.u)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("LogSpan() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAddConst(t *testing.T) {
+	// Test cases
+	tests := []struct {
+		c    float64
+		dst  []float64
+		want []float64
+	}{
+		{1.0, []float64{1.0, 2.0, 3.0}, []float64{2.0, 3.0, 4.0}},
+		{2.5, []float64{0.5, 1.0, 2.0}, []float64{3.0, 3.5, 4.5}},
+		{-1.0, []float64{3.0, 2.0, 1.0}, []float64{2.0, 1.0, 0.0}},
+		{0.0, []float64{1.0, 2.0, 3.0}, []float64{1.0, 2.0, 3.0}},
+	}
+
+	for _, test := range tests {
+		AddConst(test.c, test.dst)
+		for i := 0; i < len(test.dst); i++ {
+			if test.dst[i] != test.want[i] {
+				t.Errorf("AddConst(%f, %v) = %v, want %v", test.c, test.dst, test.dst, test.want)
+			}
+		}
+	}
+}
+
+func TestWithin(t *testing.T) {
+	tests := []struct {
+		slice    []float64
+		value    float64
+		expected int
+	}{
+		{[]float64{1.1, 2.2, 3.3, 4.4, 5.5}, 2.5, 1},
+		{[]float64{1.1, 2.2, 3.3, 4.4, 5.5}, 5.5, 4},
+		{[]float64{1.1, 2.2, 3.3, 4.4, 5.5}, 0.5, -1},
+		{[]float64{1.1}, 1.1, -1},
+		{[]float64{2.2, 1.1}, 1.1, -1},
+	}
+
+	for _, test := range tests {
+		result := Within(test.slice, test.value)
+		if result != test.expected {
+			t.Errorf("Expected Within(%v, %v) to be %d, but got %d", test.slice, test.value, test.expected, result)
+		}
+	}
+}
+
+func TestNorm(t *testing.T) {
+	tests := []struct {
+		s      []float64
+		L      float64
+		output float64
+	}{
+		{[]float64{1.0, 2.0, 3.0}, 2.0, 3.7416573867739413},
+		{[]float64{-1.0, -2.0, -3.0}, 2.0, 3.7416573867739413},
+		{[]float64{1.0, 2.0, 3.0}, 1.0, 6.0},
+		{[]float64{-1.0, -2.0, -3.0}, 1.0, 6.0},
+		{[]float64{1.0, 2.0, 3.0}, math.Inf(1), 3.0},
+		{[]float64{-1.0, -2.0, -3.0}, math.Inf(1), 3.0},
+		{[]float64{1.0, 2.0, 3.0}, 3.0, 3.3019272488946263},
+		{[]float64{-1.0, -2.0, -3.0}, 3.0, 3.3019272488946263},
+	}
+
+	for _, test := range tests {
+		result := Norm(test.s, test.L)
+		if result != test.output {
+			t.Errorf("Norm(%v, %v) = %v; want %v", test.s, test.L, result, test.output)
+		}
+	}
+}
+
+func TestArgsortLen(t *testing.T) {
+
+	// Initialize a sample argsort struct
+	testData := argsort{
+		s:    []float64{3.14, 2.71, 1.618, 0},
+		inds: []int{2, 3, 1, 0},
+	}
+
+	// Call the Len method
+	result := testData.Len()
+
+	// Define the expected length
+	expected := 4
+
+	// Check if the result matches the expected value
+	if result != expected {
+		t.Errorf("Length calculation incorrect, got: %d, want: %d.", result, expected)
+	}
+}
+
+func TestAddScaledTo(t *testing.T) {
+	tests := []struct {
+		dst    []float64
+		y      []float64
+		alpha  float64
+		s      []float64
+		result []float64
+	}{
+		{[]float64{1, 2, 3}, []float64{4, 5, 6}, 2.0, []float64{7, 8, 9}, []float64{15, 18, 21}},
+		{[]float64{0.5, 0.5}, []float64{1, 1}, 0.5, []float64{1, 1}, []float64{0.5, 0.5}},
+		{[]float64{0, 0, 0}, []float64{1, 2, 3}, -1.0, []float64{1, 2, 3}, []float64{0, -2, -6}},
+	}
+
+	for _, tc := range tests {
+		actual := AddScaledTo(tc.dst, tc.y, tc.alpha, tc.s)
+		if !reflect.DeepEqual(actual, tc.result) {
+			t.Errorf("AddScaledTo(%v, %v, %f, %v) = %v, want %v", tc.dst, tc.y, tc.alpha, tc.s, actual, tc.result)
+		}
+	}
+}
+
+func TestProd(t *testing.T) {
+	tests := []struct {
+		name string
+		input []float64
+		expected float64
+	}{
+		{"Test case 1", []float64{1.0, 2.0, 3.0, 4.0}, 24.0},
+		{"Test case 2", []float64{0.5, 0.25, 2.0, 4.0}, 1.0},
+		{"Test case 3", []float64{1.0, 1.0, 1.0, 1.0}, 1.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Prod(tt.input)
+			if result != tt.expected {
+				t.Errorf("Expected %f, but got %f", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestDot(t *testing.T) {
+	tests := []struct {
+		name  string
+		s1    []float64
+		s2    []float64
+		want  float64
+	}{
+		{"Test case 1", []float64{1.0, 2.0, 3.0}, []float64{4.0, 5.0, 6.0}, 32.0},
+		{"Test case 2", []float64{1.5, 2.5, 3.5}, []float64{4.5, 5.5, 6.5}, 38.25},
+		// Add more test cases as needed
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Dot(tt.s1, tt.s2)
+			if got != tt.want {
+				t.Errorf("Dot(%v, %v) = %v, want %v", tt.s1, tt.s2, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMul(t *testing.T) {
+	// test cases
+	tests := []struct {
+		dst []float64
+		s   []float64
+	}{
+		{[]float64{1.0, 2.0, 3.0}, []float64{3.0, 2.0, 1.0}},
+		{[]float64{0.5, 0.5, 0.5, 0.5}, []float64{2.0, 2.0, 2.0, 2.0}},
+		{[]float64{10.5, 1.2}, []float64{0.5, 2.0}},
+		{[]float64{3.0, 4.0, 5.0}, []float64{0.0, 0.0, 0.0}},
+	}
+
+	for _, test := range tests {
+		dst := make([]float64, len(test.dst))
+		copy(dst, test.dst)
+
+		Mul(dst, test.s)
+
+		for i, val := range dst {
+			expected := test.dst[i] * test.s[i]
+
+			if val != expected {
+				t.Errorf("Mul(%v, %v) expected %f, got %f", test.dst, test.s, expected, val)
+			}
+		}
+	}
+}
+
+func TestEqualApprox(t *testing.T) {
+	tol := 0.0001
+	slice1 := []float64{1.001, 2.002, 3.003}
+	slice2 := []float64{1.0011, 2.0022, 3.0033}
+
+	result := EqualApprox(slice1, slice2, tol)
+
+	assert.True(t, result, "Slices should be approximately equal")
+}
+
+func TestEqualApprox_NotEqual(t *testing.T) {
+	tol := 0.0001
+	slice1 := []float64{1.001, 2.002, 3.003}
+	slice2 := []float64{1.1, 2.2, 3.3}
+
+	result := EqualApprox(slice1, slice2, tol)
+
+	assert.False(t, result, "Slices should not be approximately equal")
+}
+
+func TestLess(t *testing.T) {
+	testCases := []struct {
+		name     string
+		s        []float64
+		expected bool
+		i        int
+		j        int
+	}{
+		{
+			name:     "less than test case",
+			s:        []float64{1.5, 2.5, 3.5},
+			expected: true,
+			i:        0,
+			j:        1,
+		},
+		{
+			name:     "greater than test case",
+			s:        []float64{2.5, 1.5, 3.5},
+			expected: false,
+			i:        0,
+			j:        1,
+		},
+		{
+			name:     "equal test case",
+			s:        []float64{1.5, 1.5, 3.5},
+			expected: false,
+			i:        0,
+			j:        1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sorter := argsort{s: tc.s}
+			result := sorter.Less(tc.i, tc.j)
+			if result != tc.expected {
+				t.Errorf("Expected %v but got %v for test case %s", tc.expected, result, tc.name)
+			}
+		})
+	}
+}
+
+func TestLogSumExp(t *testing.T) {
+	tests := []struct {
+		input []float64
+		want  float64
+	}{
+		{[]float64{1, 2, 3}, 3.4076059644443807},
+		{[]float64{-1, -2, -3}, -0.3068528194400547},
+		{[]float64{0, 0, 0}, 1.0986122886681098},
+		{[]float64{}, math.Inf(-1)},
+	}
+
+	for _, test := range tests {
+		got := LogSumExp(test.input)
+		if got != test.want {
+			t.Errorf("LogSumExp(%v) = %v; want %v", test.input, got, test.want)
+		}
+	}
+}
+
+func TestArgsortStable(t *testing.T) {
+	dst := []float64{3.4, 1.2, 7.8, 5.6}
+	inds := make([]int, len(dst))
+	expectedInds := []int{1, 0, 3, 2}
+
+	ArgsortStable(dst, inds)
+
+	if !reflect.DeepEqual(inds, expectedInds) {
+		t.Errorf("Expected inds %v, but got %v", expectedInds, inds)
+	}
+}
+
+func TestSpan(t *testing.T) {
+	tests := []struct {
+		dst       []float64
+		l         float64
+		u         float64
+		expected  []float64
+	}{
+		{make([]float64, 5), 0, 10, []float64{0, 2.5, 5, 7.5, 10}},
+		{make([]float64, 3), 5, math.NaN(), []float64{5, math.NaN(), math.NaN()}},
+		{make([]float64, 4), math.Inf(-1), 8, []float64{-Inf, -Inf, 4, 8}},
+		// Add more test cases as needed
+	}
+
+	for _, test := range tests {
+		result := Span(test.dst, test.l, test.u)
+
+		if !reflect.DeepEqual(result, test.expected) {
+			t.Errorf("Span(%v, %v, %v) = %v, want %v", test.dst, test.l, test.u, result, test.expected)
+		}
+	}
+}
+
+func TestScaleTo(t *testing.T) {
+	tests := []struct {
+		dst  []float64
+		c    float64
+		s    []float64
+		want []float64
+	}{
+		{[]float64{1, 2, 3}, 2, []float64{4, 5, 6}, []float64{8, 10, 12}},
+		{[]float64{0, 0, 0}, 5, []float64{1, 1, 1}, []float64{5, 5, 5}},
+	}
+
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			got := ScaleTo(tt.dst, tt.c, tt.s)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ScaleTo(%v, %v, %v) = %v; want %v", tt.dst, tt.c, tt.s, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSame(t *testing.T) {
+	tests := []struct {
+		s      []float64
+		t      []float64
+		expect bool
+	}{
+		{[]float64{1.0, 2.0, 3.0}, []float64{1.0, 2.0, 3.0}, true},
+		{[]float64{1.0, 2.0, 3.0}, []float64{1.0, 2.0, 4.0}, false},
+		{[]float64{1.0, math.NaN(), 3.0}, []float64{1.0, math.NaN(), 3.0}, true},
+		{[]float64{math.NaN(), 2.0, 3.0}, []float64{math.NaN(), 2.0, 3.0}, true},
+		{[]float64{1.0, 2.0}, []float64{1.0, 2.0, 3.0}, false},
+	}
+
+	for _, test := range tests {
+		result := Same(test.s, test.t)
+		if result != test.expect {
+			t.Errorf("Same(%v, %v) expected %t, but got %t", test.s, test.t, test.expect, result)
+		}
+	}
+}
+
+func TestArgsort(t *testing.T) {
+	dst := []float64{4.2, 1.8, 2.5, 3.7, 0.9}
+	inds := make([]int, len(dst))
+	Argsort(dst, inds)
+
+	expectedSorted := []float64{0.9, 1.8, 2.5, 3.7, 4.2}
+	expectedIndices := []int{4, 1, 2, 3, 0}
+
+	if !reflect.DeepEqual(dst, expectedSorted) {
+		t.Errorf("Expected sorted array to be %v, but got %v", expectedSorted, dst)
+	}
+
+	if !reflect.DeepEqual(inds, expectedIndices) {
+		t.Errorf("Expected indices array to be %v, but got %v", expectedIndices, inds)
+	}
+}
+
+
+
+func TestAddTo(t *testing.T) {
+	dst := []float64{1.0, 2.0, 3.0}
+	s := []float64{4.0, 5.0, 6.0}
+	t := []float64{7.0, 8.0, 9.0}
+
+	result := floats.AddTo(dst, s, t)
+
+	// Add your test cases here to validate the result
+	// You can use the testing functions like t.Errorf() or t.Logf() to output test results
+}
+
+func TestSubTo(t *testing.T) {
+	t.Run("same_length", func(t *testing.T) {
+		dst := make([]float64, 3)
+		s := []float64{1.0, 2.0, 3.0}
+		t := []float64{0.5, 1.5, 2.5}
+
+		expected := []float64{0.5, 0.5, 0.5}
+		result := SubTo(dst, s, t)
+
+		if !reflect.DeepEqual(result, expected) {
+			t.Errorf("Expected %v but got %v", expected, result)
+		}
+	})
+
+	t.Run("different_length", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("The code did not panic as expected")
+			}
+		}()
+
+		dst := make([]float64, 4)
+		s := []float64{1.0, 2.0, 3.0}
+		t := []float64{0.5, 1.5, 2.5}
+
+		SubTo(dst, s, t)
+	})
+}
+
+func TestCount(t *testing.T) {
+	testCases := []struct {
+		name     string
+		function func(float64) bool
+		input    []float64
+		expected int
+	}{
+		{
+			name:     "Count odd numbers",
+			function: func(x float64) bool { return int(x)%2 != 0 },
+			input:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9},
+			expected: 5,
+		},
+		{
+			name:     "Count numbers less than 5",
+			function: func(x float64) bool { return x < 5 },
+			input:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9},
+			expected: 4,
+		},
+		{
+			name:     "Count even numbers",
+			function: func(x float64) bool { return int(x)%2 == 0 },
+			input:    []float64{1, 2, 3, 4, 5, 6, 7, 8, 9},
+			expected: 4,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := Count(tc.function, tc.input)
+			if result != tc.expected {
+				t.Errorf("Expected %d, but got %d", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestCumSum(t *testing.T) {
+	dst := make([]float64, 5)
+	s := []float64{1.1, 2.2, 3.3, 4.4, 5.5}
+	expected := []float64{1.1, 3.3, 6.6, 11.0, 16.5}
+
+	result := CumSum(dst, s)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Cumulative sum is incorrect, got: %v, want: %v", result, expected)
+	}
+
+	// Additional test cases can be added here to further test the CumSum function
+}
+
+func TestSwap(t *testing.T) {
+	// Create a sample argsort struct
+	arr := []float64{3.14, 2.71, 1.618}
+	inds := []int{0, 1, 2}
+	argSort := argsort{s: arr, inds: inds}
+
+	// Perform the Swap operation
+	argSort.Swap(0, 2)
+
+	// Check if the swap was done correctly
+	expectedArr := []float64{1.618, 2.71, 3.14}
+	expectedInds := []int{2, 1, 0}
+
+	for i := range argSort.s {
+		if argSort.s[i] != expectedArr[i] {
+			t.Errorf("Expected %f but got %f at index %d", expectedArr[i], argSort.s[i], i)
+		}
+		if argSort.inds[i] != expectedInds[i] {
+			t.Errorf("Expected %d but got %d at index %d", expectedInds[i], argSort.inds[i], i)
+		}
+	}
+}
+
+func TestSumCompensated(t *testing.T) {
+	tests := []struct {
+		input    []float64
+		expected float64
+	}{
+		{[]float64{1.0, 2.0, 3.0}, 6.0},
+		{[]float64{-1.0, 1.0, -1.0}, -1.0},
+		{[]float64{0.1, 0.2, 0.3}, 0.6},
+	}
+
+	for _, test := range tests {
+		result := SumCompensated(test.input)
+		if result != test.expected {
+			t.Errorf("SumCompensated(%v) = %f; want %f", test.input, result, test.expected)
+		}
+	}
+}
+

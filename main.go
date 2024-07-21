@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
-	openai "github.com/sashabaranov/go-openai"
+	"github.com/google/generative-ai-go/genai"
+	"google.golang.org/api/option"
 )
 
 func addMapVToSlice(m map[string]string) []string {
@@ -14,23 +16,23 @@ func addMapVToSlice(m map[string]string) []string {
 	return l
 }
 
-func generateTestLevel_1(client *openai.Client, sourceFilePath string, basePrompt string, workers int) {
-	sourceCodeMap := extractFunctionLevel_1(sourceFilePath, "fastjson")
+func geminigenerateTestLevel_1(model *genai.GenerativeModel, sourceFilePath string, basePrompt string, workers int) {
+	sourceCodeMap := extractFunctionLevel_1(sourceFilePath, "boltdb")
 	sourceCodeList := addMapVToSlice(sourceCodeMap)
-	generateTest(client, sourceCodeList, "test_generation/function/fastjson/temp0.2/level_1/first_run/fastjson_test.txt", "test_generation/history/fastjson/temp0.2/level_1/first_run/fastjson_history.gob", workers)
+	generateGeminiTest(model, sourceCodeList, "gemini_generation/function/boltdb/temp1.0/level_1/first_run/boltdb_test.txt", "gemini_generation/history/boltdb/temp1.0/level_1/first_run/boltdb_history.gob", workers)
 }
 
-func generateTestLevel_2(client *openai.Client, sourceFilePath string, basePrompt string, workers int) {
-	sourceCodeMap := extractFunctionLevel_2(sourceFilePath, "package_Info/fastjson/typeMap.json", "fastjson")
+func geminigenerateTestLevel_2(model *genai.GenerativeModel, sourceFilePath string, basePrompt string, workers int) {
+	sourceCodeMap := extractFunctionLevel_2(sourceFilePath, "package_Info/boltdb/typeMap.json", "boltdb")
 	sourceCodeList := addMapVToSlice(sourceCodeMap)
 
-	generateTest(client, sourceCodeList, "test_generation/function/fastjson/temp0.2/level_2/first_run/fastjson_test.txt", "test_generation/history/fastjson/temp0.2/level_2/first_run/fastjson_history.gob", workers)
+	generateGeminiTest(model, sourceCodeList, "gemini_generation/function/boltdb/temp1.0/level_2/first_run/boltdb_test.txt", "gemini_generation/history/boltdb/temp1.0/level_2/first_run/boltdb_history.gob", workers)
 }
 
-func generateTestLevel_3(client *openai.Client, sourceFilePath string, basePrompt string, workers int) {
-	sourceCodeMap := extractFunctionLevel_3(sourceFilePath, "package_Info/fastjson/typeMap.json", "fastjson")
+func geminigenerateTestLevel_3(model *genai.GenerativeModel, sourceFilePath string, basePrompt string, workers int) {
+	sourceCodeMap := extractFunctionLevel_3(sourceFilePath, "package_Info/boltdb/typeMap.json", "boltdb")
 	sourceCodeList := addMapVToSlice(sourceCodeMap)
-	generateTest(client, sourceCodeList, "test_generation/function/fastjson/temp0.2/level_3/first_run/fastjson_test.txt", "test_generation/history/fastjson/temp0.2/level_3/first_run/fastjson_history.gob", workers)
+	generateGeminiTest(model, sourceCodeList, "gemini_generation/function/boltdb/temp1.0/level_3/first_run/boltdb_test.txt", "gemini_generation/history/boltdb/temp1.0/level_3/first_run/boltdb_history.gob", workers)
 }
 
 var sourceFilePath string
@@ -39,17 +41,17 @@ var basePrompt string
 var errorFilePath string
 
 func init() {
-	sourceFilePath = fastjsonConfig.sourceFilePath
-	testFilePath = fastjsonConfig.testFilePath
-	basePrompt = fastjsonConfig.testGenerationBasePrompt
-	errorFilePath = fastjsonConfig.errorFilePath
+	sourceFilePath = boltdbConfig.sourceFilePath
+	testFilePath = boltdbConfig.testFilePath
+	basePrompt = boltdbConfig.testGenerationBasePrompt
+	errorFilePath = boltdbConfig.errorFilePath
 }
 
 func check() {
-	slice, _ := loadSliceFromFile("test_generation/history/fastjson/temp0.2/level_3/second_run/compilation_fixed.gob")
+	slice, _ := loadSliceFromFile("test_generation/history/boltdb/temp1.0/level_3/second_run/compilation_fixed.gob")
 	for _, v := range slice {
 		for _, n := range v.FunctionNames {
-			if n == "TestVisit" {
+			if n == "TestGetInt64" {
 				fmt.Println(v.History)
 				fmt.Println("----------")
 			}
@@ -57,16 +59,47 @@ func check() {
 	}
 }
 
+func checkgemini() {
+	slice, _ := loadSliceFromFileGemini("gemini_generation/history/boltdb/temp1.0/level_1/first_run/boltdb_history.gob")
+	for _, v := range slice {
+		for _, n := range v.FunctionNames {
+			if n == "TestDB_Update" {
+				for _, h := range v.History {
+					s := h.Parts[0]
+					fmt.Println(s)
+					fmt.Println("--------------------")
+				}
+			}
+		}
+	}
+}
+
 func main() {
-	// getFunctionSignType(sourceFilePath,"structs/fastjson/typeMap.json")
+	// getFunctionSignType(sourceFilePath,"structs/boltdb/typeMap.json")
 
 	// client := openai.NewClient("sk-proj-QSsxtUz5aqUMrvGDyzeDT3BlbkFJotWEWJh6tFd209iQd8VZ")
 
-	// generateTestLevel_3(client, sourceFilePath, basePrompt, 5)
+	// repairCompilation(client, "test_generation/history/boltdb/temp1.0/level_3/first_run/boltdb_history.gob", errorFilePath, "test_generation/history/boltdb/temp1.0/level_3/second_run/compilation_fixed.gob", "test_generation/function/boltdb/temp1.0/level_3/second_run/compilation_fixed.txt", compilationBasePrompt,5,testFilePath)
+	// repairFailing(client, "test_generation/history/boltdb/temp1.0/level_3/second_run/compilation_fixed.gob", errorFilePath, "test_generation/history/boltdb/temp1.0/level_3/second_run/failed_fixed.gob", "test_generation/function/boltdb/temp1.0/level_3/second_run/failed_fixed.txt", failedTestBasePrompt, 5)
+	// removeFunction(testFilePath, loadErrorJson(errorFilePath))
+	ctx := context.Background()
 
-	// repairCompilation(client, "test_generation/history/fastjson/temp0.2/level_3/first_run/fastjson_history.gob", errorFilePath, "test_generation/history/fastjson/temp0.2/level_3/second_run/compilation_fixed.gob", "test_generation/function/fastjson/temp0.2/level_3/second_run/compilation_fixed.txt", compilationBasePrompt,5,testFilePath)
-	// repairFailing(client, "test_generation/history/fastjson/temp0.2/level_3/second_run/compilation_fixed.gob", errorFilePath, "test_generation/history/fastjson/temp0.2/level_3/second_run/failed_fixed.gob", "test_generation/function/fastjson/temp0.2/level_3/second_run/failed_fixed.txt", failedTestBasePrompt, 5)
-	removeFunction(testFilePath, loadErrorJson(errorFilePath))
-	// check()
+	client, err := genai.NewClient(ctx, option.WithAPIKey("AIzaSyB94op2w6N6YYpck6cK8xcRCXebtEl9nlw"))
+	if err != nil {
+		panic(err)
+	}
 
+	model := client.GenerativeModel("gemini-1.5-pro")
+	model.SafetySettings = []*genai.SafetySetting{
+		{
+			Category:  genai.HarmCategoryHarassment,
+			Threshold: genai.HarmBlockNone,
+		},
+		{
+			Category:  genai.HarmCategoryDangerousContent,
+			Threshold: genai.HarmBlockNone,
+		},
+	}
+	// geminigenerateTestLevel_1(model, sourceFilePath, basePrompt, 5)
+	// checkgemini()
 }

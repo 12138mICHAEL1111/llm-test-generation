@@ -21,6 +21,7 @@ import (
 	boltpackageInfo "llm-test-generation/package_Info/boltdb"
 	fastjsonPackageInfo "llm-test-generation/package_Info/fastjson"
 
+	"github.com/google/generative-ai-go/genai"
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -308,7 +309,7 @@ func chat(client *openai.Client, prompt string, messages []openai.ChatCompletion
 		openai.ChatCompletionRequest{
 			Model:       openai.GPT3Dot5Turbo0125,
 			Messages:    promptMessages,
-			Temperature: chatGPTemp,
+			Temperature: temp,
 		},
 	)
 	if err != nil {
@@ -391,7 +392,6 @@ func generateTest(client *openai.Client, sourceCodeList []string, generatedTestF
 	chunks := total / workers
 
 	var allHistories []ChatHistory
-	var funcNames [][]string
 	for i := 0; i < workers; i++ {
 		start := i * chunks
 		end := start + chunks
@@ -429,7 +429,6 @@ func generateTest(client *openai.Client, sourceCodeList []string, generatedTestF
 				histories = append(histories, chatH)
 
 				mutex.Lock()
-				funcNames = append(funcNames, functionNameList)
 				_, err = file.WriteString(fmt.Sprintf("%s\n\n", testFunctionStr))
 				mutex.Unlock()
 				if err != nil {
@@ -776,7 +775,8 @@ func parseJsonFile(filename string) map[string]string {
 	return result
 }
 
-func saveSliceToFile(slice []ChatHistory, filename string) error {
+func saveSliceToFile(slice interface{}, filename string) error {
+	gob.Register(genai.Text(""))
 	if _, err := os.Stat(filename); err == nil {
 		err := os.Remove(filename)
 		if err != nil {
@@ -958,4 +958,23 @@ func AppendIfNotPresent(slice []string, item string) []string {
 		}
 	}
 	return append(slice, item)
+}
+
+func generateTestLevel_1(client *openai.Client, sourceFilePath string, basePrompt string, workers int) {
+	sourceCodeMap := extractFunctionLevel_1(sourceFilePath, "fastjson")
+	sourceCodeList := addMapVToSlice(sourceCodeMap)
+	generateTest(client, sourceCodeList, "test_generation/function/fastjson/temp1.0/level_1/first_run/fastjson_test.txt", "test_generation/history/fastjson/temp1.0/level_1/first_run/fastjson_history.gob", workers)
+}
+
+func generateTestLevel_2(client *openai.Client, sourceFilePath string, basePrompt string, workers int) {
+	sourceCodeMap := extractFunctionLevel_2(sourceFilePath, "package_Info/fastjson/typeMap.json", "fastjson")
+	sourceCodeList := addMapVToSlice(sourceCodeMap)
+
+	generateTest(client, sourceCodeList, "test_generation/function/fastjson/temp1.0/level_2/first_run/fastjson_test.txt", "test_generation/history/fastjson/temp1.0/level_2/first_run/fastjson_history.gob", workers)
+}
+
+func generateTestLevel_3(client *openai.Client, sourceFilePath string, basePrompt string, workers int) {
+	sourceCodeMap := extractFunctionLevel_3(sourceFilePath, "package_Info/fastjson/typeMap.json", "fastjson")
+	sourceCodeList := addMapVToSlice(sourceCodeMap)
+	generateTest(client, sourceCodeList, "test_generation/function/fastjson/temp1.0/level_3/first_run/fastjson_test.txt", "test_generation/history/fastjson/temp1.0/level_3/first_run/fastjson_history.gob", workers)
 }
