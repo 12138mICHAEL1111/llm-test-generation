@@ -23,7 +23,7 @@ func geminiChat(model *genai.GenerativeModel, prompt string, messages []*genai.C
 	resp, err := cs.SendMessage(context.Background(), genai.Text(prompt))
 
 	if err != nil {
-		fmt.Println(resp.PromptFeedback.BlockReason)
+		fmt.Println(prompt)
 		panic(err)
 	}
 
@@ -179,7 +179,7 @@ func geminiRepairCompilation(model *genai.GenerativeModel, historyFile string, e
 	wg.Wait()
 	fmt.Println("All goroutines completed.")
 
-	for _, history := range histories {
+	for k, history := range histories {
 		chatMsgs := history.History
 		lastMsg := chatMsgs[len(chatMsgs)-1]
 		c, ok := lastMsg.Parts[0].(genai.Text)
@@ -187,7 +187,8 @@ func geminiRepairCompilation(model *genai.GenerativeModel, historyFile string, e
 			panic("fail to parse resp")
 		}
 		extractedFunctions := extractedGeneratedCode(string(c))
-
+		funcNames := extractFuntionName(extractedFunctions)
+		histories[k].FunctionNames = funcNames
 		_, err := file.WriteString(extractedFunctions + "\n")
 		if err != nil {
 			panic(err)
@@ -259,4 +260,78 @@ func geminiIntegration(errorJSON map[string]string, histories []GeminiChatHistor
 		errorJSON[k] = errorJSON[k][:len(errorJSON[k])-1]
 	}
 	return errorJSON
+}
+
+func geminiRepairFailing(model *genai.GenerativeModel, historyFile string, errorFile string, saveHistroyFile string, saveCompletionFile string, baseprompt string, workers int) {
+	histories, err := loadSliceFromFileGemini(historyFile)
+	if err != nil {
+		panic(err)
+	}
+	errorJson := loadErrorJson(errorFile)
+	removeFunction(testFilePath, errorJson)
+
+	errors := geminiIntegration(errorJson, histories)
+	var mutex sync.Mutex
+	wg := sync.WaitGroup{}
+	sem := make(chan struct{}, workers)
+
+	file, err := os.Create(saveCompletionFile)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for targetName, errorMsg := range errors {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(targetName, errorMsg string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			prompt := baseprompt + errorMsg
+
+			for k, chatHistory := range histories {
+				functionNames := chatHistory.FunctionNames
+				flag := false
+				for _, functionName := range functionNames {
+					if functionName == targetName {
+						flag = true
+					}
+				}
+				if flag {
+					completion := geminiChat(model, prompt, histories[k].History)
+					extractedFunctions := extractedGeneratedCode(string(completion))
+					funcNames := extractFuntionName(extractedFunctions)
+					mutex.Lock()
+					histories[k].FunctionNames = funcNames
+					histories[k].History = append(histories[k].History, &genai.Content{
+						Role: "user",
+						Parts: []genai.Part{
+							genai.Text(prompt),
+						},
+					},
+						&genai.Content{
+							Role: "model",
+							Parts: []genai.Part{
+								genai.Text(completion),
+							},
+						})
+					_, err := file.WriteString(extractedFunctions + "\n")
+					if err != nil {
+						panic(err)
+					}
+					mutex.Unlock()
+
+				}
+			}
+		}(targetName, errorMsg)
+	}
+
+	wg.Wait()
+
+	err = saveSliceToFile(histories, saveHistroyFile)
+	if err != nil {
+		panic(err)
+	}
+
 }

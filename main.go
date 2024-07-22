@@ -60,10 +60,10 @@ func check() {
 }
 
 func checkgemini() {
-	slice, _ := loadSliceFromFileGemini("gemini_generation/history/boltdb/temp1.0/level_1/first_run/boltdb_history.gob")
+	slice, _ := loadSliceFromFileGemini("gemini_generation/history/boltdb/temp1.0/level_1/second_run/failed_fixed.gob")
 	for _, v := range slice {
 		for _, n := range v.FunctionNames {
-			if n == "TestDB_Update" {
+			if n == "TestOpen" {
 				for _, h := range v.History {
 					s := h.Parts[0]
 					fmt.Println(s)
@@ -100,6 +100,11 @@ func main() {
 			Threshold: genai.HarmBlockNone,
 		},
 	}
+
 	// geminigenerateTestLevel_1(model, sourceFilePath, basePrompt, 5)
-	// checkgemini()
+
+	// geminiRepairCompilation(model, "gemini_generation/history/boltdb/temp1.0/level_1/first_run/boltdb_history.gob", errorFilePath, "gemini_generation/history/boltdb/temp1.0/level_1/second_run/compilation_fixed.gob", "gemini_generation/function/boltdb/temp1.0/level_1/second_run/compilation_fixed.txt", compilationBasePrompt,5,testFilePath)
+	// geminiRepairFailing(model, "gemini_generation/history/boltdb/temp1.0/level_1/second_run/compilation_fixed.gob", errorFilePath, "gemini_generation/history/boltdb/temp1.0/level_1/second_run/failed_fixed.gob", "gemini_generation/function/boltdb/temp1.0/level_1/second_run/failed_fixed.txt", failedTestBasePrompt, 5)
+
+	checkgemini()
 }
