@@ -1,0 +1,243 @@
+func TestDB_Stats(t *testing.T) {
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove("my.db")
+	defer db.Close()
+
+	// Perform some operations to update the stats.
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("mybucket"))
+		if err != nil {
+			return err
+		}
+		return tx.Bucket([]byte("mybucket")).Put([]byte("key"), []byte("value"))
+	})
+
+	// Get the stats.
+	stats := db.Stats()
+
+	// Assert that the stats are not empty.
+	if stats.FreePageN == 0 {
+		t.Error("Expected stats to be non-empty")
+	}
+}
+func TestOpen(t *testing.T) {
+	path := "test.db"
+	defer os.Remove(path)
+
+	// Test opening a new database.
+	db, err := bolt.Open(path, 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close() // Close db before opening again
+
+	// Test opening an existing database.
+	db2, err := bolt.Open(path, 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db2.Close()
+
+	// Test opening a database with read-only mode.
+	db3, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db3.Close()
+}
+func TestDB_IsReadOnly(t *testing.T) {
+	t.Run("Read-only database", func(t *testing.T) {
+		f, err := os.CreateTemp("", "bolt-test-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+
+		// First, open the database in write mode to create it
+		db, err := bolt.Open(f.Name(), 0600, nil) 
+		if err != nil {
+			t.Fatal(err)
+		}
+		db.Close() // Close the database after creation
+
+		// Then, open the database in read-only mode
+		db, err = bolt.Open(f.Name(), 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if !db.IsReadOnly() {
+			t.Error("Expected database to be read-only")
+		}
+	})
+
+	t.Run("Writable database", func(t *testing.T) {
+		f, err := os.CreateTemp("", "bolt-test-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+
+		db, err := bolt.Open(f.Name(), 0600, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if db.IsReadOnly() {
+			t.Error("Expected database to be writable")
+		}
+	})
+}
+///warning///
+The `TestDB_Batch` test function you provided is likely timing out because it's waiting 5 seconds within a batch operation that has a timeout of 1 millisecond. This causes the test to hang and eventually timeout. 
+
+Here's the problematic section:
+
+```go
+// Test batch operations with timeout
+db.MaxBatchDelay = 1 * time.Millisecond
+go func() {
+    time.Sleep(2 * time.Millisecond)
+    db.Batch(func(tx *bolt.Tx) error {
+        return nil
+    })
+}()
+err = db.Batch(func(tx *bolt.Tx) error {
+    time.Sleep(5 * time.Millisecond) // This line causes the timeout
+    return nil
+})
+assert.NoError(t, err)
+```
+
+To fix this, you should **avoid long-running operations within a batch, especially when testing timeouts.** The purpose of the timeout is to ensure that batches are processed promptly. 
+
+Here's a revised version of the test function that addresses the timeout issue and includes other improvements for clarity and robustness:
+
+```go
+package bolt_test
+
+import (
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/boltdb/bolt"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestDB_Batch(t *testing.T) {
+	path := tempFilePath()
+	defer os.Remove(path)
+
+	db, err := bolt.Open(path, 0666, nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	t.Run("SuccessfulBatch", func(t *testing.T) {
+		err = db.Batch(func(tx *bolt.Tx) error {
+			b, err := tx.CreateBucketIfNotExists([]byte("testBucket"))
+			if err != nil {
+				return err
+			}
+			return b.Put([]byte("testKey"), []byte("testValue"))
+		})
+		assert.NoError(t, err)
+
+		err = db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte("testBucket"))
+			assert.NotNil(t, b)
+			value := b.Get([]byte("testKey"))
+			assert.Equal(t, []byte("testValue"), value)
+			return nil
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("ExceedingMaxBatchSize", func(t *testing.T) {
+		db.MaxBatchSize = 2
+		err = db.Update(func(tx *bolt.Tx) error {
+			for i := 0; i < 5; i++ {
+				err := db.Batch(func(tx *bolt.Tx) error {
+					b := tx.Bucket([]byte("testBucket"))
+					assert.NotNil(t, b)
+					return b.Put([]byte(fmt.Sprintf("key%d", i)), []byte(fmt.Sprintf("value%d", i)))
+				})
+				assert.NoError(t, err)
+			}
+			return nil
+		})
+		assert.NoError(t, err)
+
+		err = db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte("testBucket"))
+			assert.NotNil(t, b)
+			for i := 0; i < 5; i++ {
+				value := b.Get([]byte(fmt.Sprintf("key%d", i)))
+				assert.Equal(t, []byte(fmt.Sprintf("value%d", i)), value)
+			}
+			return nil
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("BatchErrorHandling", func(t *testing.T) {
+		err = db.Batch(func(tx *bolt.Tx) error {
+			return fmt.Errorf("intentional error")
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("BatchTimeout", func(t *testing.T) {
+		db.MaxBatchDelay = 1 * time.Millisecond
+		done := make(chan struct{})
+
+		// Start a goroutine to execute a batch after a delay
+		go func() {
+			time.Sleep(2 * time.Millisecond)
+			db.Batch(func(tx *bolt.Tx) error {
+				// Signal completion
+				close(done)
+				return nil
+			})
+		}()
+
+		// Execute a batch that should complete before the timeout
+		err = db.Batch(func(tx *bolt.Tx) error {
+			return nil
+		})
+		assert.NoError(t, err)
+
+		// Wait for the delayed batch to complete
+		select {
+		case <-done:
+		case <-time.After(5 * time.Millisecond):
+			t.Fatal("Batch operation timed out")
+		}
+	})
+}
+
+func tempFilePath() string {
+	f, err := os.CreateTemp("", "bolt-")
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
+	return f.Name()
+}
+```
+
+This revised code:
+
+- **Organizes tests into subtests** for better readability and isolation.
+- **Removes the sleep within the timed batch operation**, ensuring it completes quickly.
+- **Uses a channel to synchronize and verify the completion** of the delayed batch operation.
+- **Provides clearer error messages** in case of timeouts. 
+
+This approach should resolve the timeout issue and make your test more reliable. 
+

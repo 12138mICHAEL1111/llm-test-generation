@@ -185,7 +185,8 @@
     ],
     "getKV": [
         "Object",
-        "kv"
+        "kv",
+        "Value"
     ],
     "getValue": [
         "cache",
@@ -238,7 +239,8 @@
     ],
     "reset": [
         "Object",
-        "kv"
+        "kv",
+        "Value"
     ],
     "skipWS": [
         "string"
@@ -248,7 +250,8 @@
     ],
     "unescapeKeys": [
         "Object",
-        "kv"
+        "kv",
+        "Value"
     ],
     "unescapeStringBestEffort": [
         "string"

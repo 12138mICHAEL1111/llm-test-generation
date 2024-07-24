@@ -1,0 +1,954 @@
+func TestValue_GetObject(t *testing.T) {
+	tests := []struct {
+		name string
+		v    *Value
+		keys []string
+		want *Object
+	}{
+		{
+			name: "nil value",
+			v:    nil,
+			keys: []string{"key"},
+			want: nil,
+		},
+		{
+			name: "not an object",
+			v:    &Value{t: TypeString},
+			keys: []string{"key"},
+			want: nil,
+		},
+		{
+			name: "empty keys",
+			v:    &Value{t: TypeObject, o: Object{}}, // This line is updated
+			keys: []string{},
+			want: &Value{t: TypeObject, o: Object{}}.o, // This line is updated
+		},
+		{
+			name: "key not found",
+			v:    &Value{t: TypeObject, o: Object{kvs: []kv{{"other", &Value{}}}}},
+			keys: []string{"key"},
+			want: nil,
+		},
+		{
+			name: "key found",
+			v:    &Value{t: TypeObject, o: Object{kvs: []kv{{"key", &Value{t: TypeObject}}}}}, // This line is updated
+			keys: []string{"key"},
+			want: &Value{t: TypeObject, o: Object{}}.o,                                          // This line is updated
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.v.GetObject(tt.keys...); got != tt.want {
+				t.Errorf("Value.GetObject() = %p, want %p", got, tt.want)
+			}
+		})
+	}
+}
+func TestObject_Visit(t *testing.T) {
+	// Test cases
+	tests := []struct {
+		name     string
+		json     string
+		expected map[string]string
+	}{
+		{
+			name:     "Empty object",
+			json:     "{}",
+			expected: map[string]string{},
+		},
+		{
+			name:     "Simple object",
+			json:     `{"key1": "value1", "key2": "value2"}`,
+			expected: map[string]string{"key1": "value1", "key2": "value2"},
+		},
+		{
+			name:     "Escaped keys",
+			json:     `{"key\n1": "value1", "key\t2": "value2"}`,
+			expected: map[string]string{"key\n1": "value1", "key\t2": "value2"},
+		},
+	}
+
+	// Iterate over test cases
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Parse JSON
+			var p Parser
+			v, err := p.Parse(tc.json)
+			if err != nil {
+				t.Fatalf("Failed to parse JSON: %v", err)
+			}
+
+			// Get object from parsed value
+			o, err := v.Object()
+			if err != nil {
+				t.Fatalf("Failed to get object: %v", err)
+			}
+
+			// Visit object and collect key-value pairs
+			actual := make(map[string]string)
+			o.Visit(func(key []byte, v *Value) {
+				// The issue was that we were calling v.String() which returns a quoted string.
+				// We need to use v.GetStringBytes() and then convert it to string.
+				actual[string(key)] = string(v.GetStringBytes()) 
+			})
+
+			// Compare expected and actual values
+			if len(actual) != len(tc.expected) {
+				t.Errorf("Expected %d key-value pairs, got %d", len(tc.expected), len(actual))
+			}
+			for k, v := range tc.expected {
+				if actualV, ok := actual[k]; !ok || actualV != v {
+					t.Errorf("Expected value for key '%s' to be '%s', got '%s'", k, v, actualV)
+				}
+			}
+		})
+	}
+}
+func TestParseRawNumber(t *testing.T) {
+	tests := []struct {
+		input  string
+		ns     string
+		remain string
+		err    error
+	}{
+		{"123", "123", "", nil},
+		{"123.456", "123.456", "", nil},
+		{"-123", "-123", "", nil},
+		{"+123", "+123", "", nil},
+		{"1.2e3", "1.2e3", "", nil},
+		{"1.2E-3", "1.2E-3", "", nil},
+		{"123abc", "123", "abc", nil},
+		{"+123abc", "+123", "abc", nil},
+		{"-123abc", "-123", "abc", nil},
+		{"inf", "inf", "", nil},
+		{"+inf", "+inf", "", nil},
+		{"-inf", "-inf", "", nil},
+		{"InF", "InF", "", nil},
+		{"+iNf", "+iNf", "", nil},
+		{"-INF", "-INF", "", nil},
+		{"nan", "nan", "", nil},
+		{"+nan", "+nan", "", nil},
+		{"-nan", "-nan", "", nil},
+		{"nAn", "nAn", "", nil},
+		{"+nAN", "+nAN", "", nil},
+		{"-NAN", "-NAN", "", nil},
+		{"in", "", "in", fmt.Errorf("unexpected char: %q", "i")},
+		{"+i", "", "i", fmt.Errorf("unexpected char: %q", "i")},
+		{"-i", "", "i", fmt.Errorf("unexpected char: %q", "i")},
+		{"a123", "", "a123", fmt.Errorf("unexpected char: %q", "a")},
+		{"+a123", "", "a123", fmt.Errorf("unexpected char: %q", "a")},
+		{"-a123", "", "a123", fmt.Errorf("unexpected char: %q", "a")},
+	}
+	for i, tt := range tests {
+		ns, remain, err := parseRawNumber(tt.input)
+		if ns != tt.ns || remain != tt.remain || (err != nil && tt.err == nil) || (err == nil && tt.err != nil) || (err != nil && tt.err != nil && err.Error() != tt.err.Error()) {
+			t.Errorf("test %d failed. expected: %v, %v, %v, got: %v, %v, %v", i, tt.ns, tt.remain, tt.err, ns, remain, err)
+		}
+	}
+}
+func TestParseRawString(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+		remain   string
+		err      error
+	}{
+		{`"hello" world`, "hello", " world", nil},
+		{`"hello\"" world`, `hello"`, " world", nil},
+		{`"hello\\" world`, `hello\`, " world", nil},
+		{`"hello\\\"" world`, `hello\"`, " world", nil},
+		{`"hello world"`, "hello world", "", nil},
+		{`"hello \"world\""`, `hello "world"`, "", nil},
+		{`"\\"`, `\`, "", nil},
+		{`"\\\""`, `\"`, "", nil},
+		{`"\\\\\""`, `\\\"`, "", nil},
+		{`"hello`, "", "", fmt.Errorf(`missing closing '"'`)},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			actual, remain, err := parseRawString(tt.input)
+
+			if actual != tt.expected {
+				t.Errorf("test[%d] - expected: %q, actual: %q", i, tt.expected, actual)
+			}
+
+			if remain != tt.remain {
+				t.Errorf("test[%d] - expected: %q, actual: %q", i, tt.remain, remain)
+			}
+
+			if (err != nil && tt.err == nil) || (err == nil && tt.err != nil) || (err != nil && tt.err != nil && err.Error() != tt.err.Error()) {
+				t.Errorf("test[%d] - expected: %v, actual: %v", i, tt.err, err)
+			}
+		})
+	}
+}
+func TestParseObject(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantObj  string
+		wantTail string
+		wantErr  string
+	}{
+		{
+			input:    `{}`,
+			wantObj:  `{}`,
+			wantTail: ``,
+			wantErr:  "",
+		},
+		{
+			input:    `{ "key": "value" }`,
+			wantObj:  `{"key":"value"}`,
+			wantTail: ``,
+			wantErr:  "",
+		},
+		{
+			input:    `{ "key1": "value1", "key2": "value2" }`,
+			wantObj:  `{"key1":"value1","key2":"value2"}`,
+			wantTail: ``,
+			wantErr:  "",
+		},
+		{
+			input:    `{ "key": 123 }`,
+			wantObj:  `{"key":123}`,
+			wantTail: ``,
+			wantErr:  "",
+		},
+		{
+			input:    `{ "key": true }`,
+			wantObj:  `{"key":true}`,
+			wantTail: ``,
+			wantErr:  "",
+		},
+		{
+			input:    `{ "key": [1, 2, 3] }`,
+			wantObj:  `{"key":[1,2,3]}`,
+			wantTail: ``,
+			wantErr:  "",
+		},
+		{
+			input:    `{ "key": { "nested": "value" } }`,
+			wantObj:  `{"key":{"nested":"value"}}`,
+			wantTail: ``,
+			wantErr:  "",
+		},
+		// error cases
+		{
+			input:    ``,
+			wantObj:  ``,
+			wantTail: ``,
+			wantErr:  "missing '}'",
+		},
+		{
+			input:    `{`,
+			wantObj:  ``,
+			wantTail: `{`,
+			wantErr:  "missing '}'",
+		},
+		{
+			input:    `{ "key"`,
+			wantObj:  ``,
+			wantTail: `{ "key"`,
+			wantErr:  "missing ':' after object key",
+		},
+		{
+			input:    `{ "key": `,
+			wantObj:  ``,
+			wantTail: `{ "key": `,
+			wantErr:  "cannot parse object value: unexpected end of object",
+		},
+		{
+			input:    `{ "key": "value" `,
+			wantObj:  ``,
+			wantTail: `{ "key": "value" `,
+			wantErr:  "missing ',' after object value",
+		},
+		{
+			input:    `{ "key": "value" }a`,
+			wantObj:  `{"key":"value"}`,
+			wantTail: `a`,
+			wantErr:  "",
+		},
+	}
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("Test_%d", i), func(t *testing.T) {
+			c := &cache{}
+			gotObj, gotTail, gotErr := parseObject(tt.input, c, 0)
+			if gotErr != nil {
+				if tt.wantErr == "" {
+					t.Errorf("unexpected error: %v", gotErr)
+				} else if gotErr.Error() != tt.wantErr {
+					t.Errorf("error mismatch: want %q, got %q", tt.wantErr, gotErr.Error())
+				}
+				return
+			}
+			if tt.wantErr != "" {
+				t.Errorf("want error %q, got nil", tt.wantErr)
+				return
+			}
+			gotObjStr := gotObj.String()
+			if gotObjStr != tt.wantObj {
+				t.Errorf("object mismatch: want %q, got %q", tt.wantObj, gotObjStr)
+			}
+			if gotTail != tt.wantTail {
+				t.Errorf("tail mismatch: want %q, got %q", tt.wantTail, gotTail)
+			}
+		})
+	}
+}
+func TestUnescapeStringBestEffort(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// Basic strings
+		{"", ""},
+		{"hello", "hello"},
+		{"world", "world"},
+
+		// Escaped characters
+		{"\\\"", "\""},
+		{"\\\\", "\\"},
+		{"\\/", "/"},
+		{"\\b", "\b"},
+		{"\\f", "\f"},
+		{"\\n", "\n"},
+		{"\\r", "\r"},
+		{"\\t", "\t"},
+
+		// Unicode characters
+		{"\\u0020", " "},
+		{"\\u00A9", "©"},
+		{"\\u20AC", "€"},
+		{"\\uD83D\\uDE01", "😁"},
+
+		// Invalid Unicode characters
+		{"\\u", "\\u"},
+		{"\\u002", "\\u002"},
+		{"\\uD800", "\\uD800"},
+		{"\\uD800\\u", "\\uD800\\u"},
+		{"\\uD800\\uD800", "\\uD800\\uD800"},
+
+		// Mixed strings
+		{"hello\\tworld", "hello\tworld"},
+		{"\\\"hello\\\"", "\"hello\""},
+		{"\\u00A9 2023", "© 2023"},
+	}
+
+	for _, test := range tests {
+		actual := unescapeStringBestEffort(test.input)
+		if actual != test.expected {
+			t.Errorf("Input: %q, Expected: %q, Actual: %q", test.input, test.expected, actual)
+		}
+	}
+}
+
+func unescapeStringBestEffort(s string) string {
+	n := strings.IndexByte(s, '\\')
+	if n < 0 {
+		return s
+	}
+
+	b := s2b(s)
+	b = b[:n]
+	s = s[n+1:]
+	for len(s) > 0 {
+		ch := s[0]
+		s = s[1:]
+		switch ch {
+		case '"':
+			b = append(b, '"')
+		case '\\':
+			b = append(b, '\\')
+		case '/':
+			b = append(b, '/')
+		case 'b':
+			b = append(b, '\b')
+		case 'f':
+			b = append(b, '\f')
+		case 'n':
+			b = append(b, '\n')
+		case 'r':
+			b = append(b, '\r')
+		case 't':
+			b = append(b, '\t')
+		case 'u':
+			if len(s) < 4 {
+				b = append(b, "\\u"...)
+				break
+			}
+			xs := s[:4]
+			x, err := strconv.ParseUint(xs, 16, 16)
+			if err != nil {
+				b = append(b, "\\u"...)
+				break
+			}
+			s = s[4:]
+			if !utf16.IsSurrogate(rune(x)) {
+				b = append(b, string(rune(x))...)
+				break
+			}
+
+			// The bug was here: it was missing a check for s length before accessing s[1]
+			if len(s) < 6 || s[0] != '\\' || s[1] != 'u' {
+				b = append(b, "\\u"...)
+				b = append(b, xs...)
+				break
+			}
+			x1, err := strconv.ParseUint(s[2:6], 16, 16)
+			if err != nil {
+				b = append(b, "\\u"...)
+				b = append(b, xs...)
+				break
+			}
+			r := utf16.DecodeRune(rune(x), rune(x1))
+			b = append(b, string(r)...)
+			s = s[6:]
+		default:
+			b = append(b, '\\', ch)
+		}
+		n = strings.IndexByte(s, '\\')
+		if n < 0 {
+			b = append(b, s...)
+			break
+		}
+		b = append(b, s[:n]...)
+		s = s[n+1:]
+	}
+	return b2s(b)
+}
+func TestObject_unescapeKeys(t *testing.T) {
+	type fields struct {
+		kvs           []kv
+		keysUnescaped bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+	}{
+		{
+			name: "test unescape keys",
+			fields: fields{
+				kvs: []kv{
+					{
+						k: `\u0061`,
+						v: &Value{
+							s: "b",
+							t: TypeString,
+						},
+					},
+				},
+				keysUnescaped: false,
+			},
+		},
+		{
+			name: "test already unescaped keys",
+			fields: fields{
+				kvs: []kv{
+					{
+						k: `a`,
+						v: &Value{
+							s: "b",
+							t: TypeString,
+						},
+					},
+				},
+				keysUnescaped: true,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := &Object{
+				kvs:           tt.fields.kvs,
+				keysUnescaped: tt.fields.keysUnescaped,
+			}
+			o.unescapeKeys()
+			if !o.keysUnescaped {
+				t.Errorf("Object.keysUnescaped should be true after unescapeKeys()")
+			}
+			for _, kv := range o.kvs {
+				if hasSpecialChars(kv.k) {
+					t.Errorf("key %s should be unescaped", kv.k)
+				}
+			}
+		})
+	}
+}
+func TestValue_GetUint64(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		keys []string
+		want uint64
+	}{
+		{
+			name: "simple",
+			json: `{"a":123}`, 
+			keys: []string{"a"},
+			want: 123,
+		},
+		{
+			name: "nested",
+			json: `{"a":{"b":123}}`, 
+			keys: []string{"a", "b"},
+			want: 123,
+		},
+		{
+			name: "not_found",
+			json: `{"a":123}`,
+			keys: []string{"b"},
+			want: 0,
+		},
+		{
+			name: "not_number",
+			json: `{"a":"123"}`, 
+			keys: []string{"a"},
+			want: 0,
+		},
+		{
+			name: "empty_key",
+			json: `{"a":123}`,
+			keys: []string{},
+			want: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, _, err := parseObject(tt.json, &cache{}, 0) 
+			if err != nil {
+				t.Errorf("parseObject() error = %v", err)
+				return
+			}
+			if got := v.GetUint64(tt.keys...); got != tt.want {
+				t.Errorf("Value.GetUint64() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestValue_Int64(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantInt     int64
+		wantErr     bool
+		wantErrStr string
+	}{
+		{
+			input:   `1234567890`,
+			wantInt: 1234567890,
+		},
+		{
+			input:   `-1234567890`,
+			wantInt: -1234567890,
+		},
+		{
+			input:       `"1234567890"`,
+			wantErr:     true,
+			wantErrStr: "value doesn't contain number; it contains string",
+		},
+		{
+			input:       `null`,
+			wantErr:     true,
+			wantErrStr: "value doesn't contain number; it contains null",
+		},
+	}
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			v := &Value{
+				s: tt.input,
+			}
+			if tt.wantErr {
+				v.t = TypeString
+			} else {
+				v.t = TypeNumber
+			}
+			got, err := v.Int64()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Int64() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				if err.Error() != tt.wantErrStr {
+					t.Errorf("Int64() error string = %v, wantErrStr %v", err.Error(), tt.wantErrStr)
+				}
+				return
+			}
+			if got != tt.wantInt {
+				t.Errorf("Int64() got = %v, want %v", got, tt.wantInt)
+			}
+		})
+	}
+}
+func TestValue_GetStringBytes(t *testing.T) {
+	tests := []struct {
+		name string
+		v    *Value
+		keys []string
+		want []byte
+	}{
+		{
+			name: "simple",
+			v: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "test", v: &Value{t: TypeString, s: "value"}},
+					},
+				},
+			},
+			keys: []string{"test"},
+			want: []byte("value"),
+		},
+		{
+			name: "nested",
+			v: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "outer", v: &Value{
+							o: Object{
+								kvs: []kv{
+									{k: "inner", v: &Value{t: TypeString, s: "nestedValue"}},
+								},
+							},
+						}},
+					},
+				},
+			},
+			keys: []string{"outer", "inner"},
+			want: []byte("nestedValue"),
+		},
+		{
+			name: "missing key",
+			v: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "test", v: &Value{t: TypeString, s: "value"}},
+					},
+				},
+			},
+			keys: []string{"missing"},
+			want: nil,
+		},
+		{
+			name: "wrong type",
+			v: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "test", v: &Value{t: TypeNumber, s: "123"}},
+					},
+				},
+			},
+			keys: []string{"test"},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.v.GetStringBytes(tt.keys...)
+			if string(got) != string(tt.want) {
+				t.Errorf("Value.GetStringBytes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestValue_GetInt(t *testing.T) {
+	tests := []struct {
+		name  string
+		value *Value
+		keys  []string
+		want  int
+	}{
+		{
+			name: "Get existing int value",
+			value: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "key1", v: &Value{t: TypeNumber, s: "123"}},
+					},
+				},
+			},
+			keys: []string{"key1"},
+			want: 123,
+		},
+		{
+			name: "Get non-existing key",
+			value: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "key1", v: &Value{t: TypeNumber, s: "123"}},
+					},
+				},
+			},
+			keys: []string{"key2"},
+			want: 0,
+		},
+		{
+			name: "Get value with wrong type",
+			value: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "key1", v: &Value{t: TypeString, s: "123"}},
+					},
+				},
+			},
+			keys: []string{"key1"},
+			want: 0,
+		},
+		{
+			name:  "Get value from nil object",
+			value: nil,
+			keys:  []string{"key1"},
+			want:  0,
+		},
+		{
+			name: "Get value with overflow",
+			value: &Value{
+				o: Object{
+					kvs: []kv{
+						{k: "key1", v: &Value{t: TypeNumber, s: "9223372036854775808"}},
+					},
+				},
+			},
+			keys: []string{"key1"},
+			want: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.value.GetInt(tt.keys...); got != tt.want {
+				t.Errorf("Value.GetInt() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestValue_GetUint(t *testing.T) {
+	tests := []struct {
+		name  string
+		json  string
+		keys  []string
+		want  uint
+		want1 bool
+	}{
+		{
+			name:  "simple",
+			json:  `{"foo":123}`,
+			keys:  []string{"foo"},
+			want:  123,
+			want1: true,
+		},
+		{
+			name:  "number is string",
+			json:  `{"foo":"123"}`,
+			keys:  []string{"foo"},
+			want:  0,
+			want1: false,
+		},
+		{
+			name:  "number is float",
+			json:  `{"foo":123.456}`,
+			keys:  []string{"foo"},
+			want:  123,
+			want1: true,
+		},
+		{
+			name:  "number overflows uint",
+			json:  `{"foo":18446744073709551616}`,
+			keys:  []string{"foo"},
+			want:  0,
+			want1: false,
+		},
+		{
+			name:  "negative number",
+			json:  `{"foo":-123}`,
+			keys:  []string{"foo"},
+			want:  0,
+			want1: false,
+		},
+		{
+			name:  "key not found",
+			json:  `{"foo":123}`,
+			keys:  []string{"bar"},
+			want:  0,
+			want1: false,
+		},
+		{
+			name:  "null",
+			json:  `{"foo":null}`,
+			keys:  []string{"foo"},
+			want:  0,
+			want1: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := ParseBytes([]byte(tt.json))
+			if err != nil {
+				t.Errorf("ParseBytes() error = %v, wantErr %v", err, tt.want1)
+				return
+			}
+
+			got := v.GetUint(tt.keys...)
+			if got != tt.want {
+				t.Errorf("GetUint() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestParseValue(t *testing.T) {
+	c := &cache{}
+	tests := []struct {
+		input string
+		want  *Value
+		tail  string
+		err   error
+	}{
+		// Empty string.
+		{"", nil, "", fmt.Errorf("cannot parse empty string")},
+
+		// Object.
+		{`{"foo":"bar"}`, &Value{t: TypeObject, o: Object{kvs: []kv{{k: "foo", v: &Value{t: typeRawString, s: "bar"}}}}}, "", nil},
+
+		// Array.
+		{`[1,2,3]`, &Value{t: TypeArray, a: []*Value{{t: TypeNumber, s: "1"}, {t: TypeNumber, s: "2"}, {t: TypeNumber, s: "3"}}}, "", nil},
+
+		// String.
+		{`"hello"`, &Value{t: typeRawString, s: "hello"}, "", nil},
+
+		// True.
+		{"true", valueTrue, "", nil},
+
+		// False.
+		{"false", valueFalse, "", nil},
+
+		// Null.
+		{"null", valueNull, "", nil},
+
+		// Number.
+		{"123", &Value{t: TypeNumber, s: "123"}, "", nil},
+		{"-123", &Value{t: TypeNumber, s: "-123"}, "", nil},
+		{"123.456", &Value{t: TypeNumber, s: "123.456"}, "", nil},
+		{"-123.456", &Value{t: TypeNumber, s: "-123.456"}, "", nil},
+		{"1.234e5", &Value{t: TypeNumber, s: "1.234e5"}, "", nil},
+		{"1.234e+5", &Value{t: TypeNumber, s: "1.234e+5"}, "", nil},
+		{"1.234e-5", &Value{t: TypeNumber, s: "1.234e-5"}, "", nil},
+
+		// NaN
+		{"NaN", &Value{t: TypeNumber, s: "NaN"}, "", nil},
+
+		// Invalid.
+		{"invalid", nil, "invalid", fmt.Errorf("unexpected value found: %q", "invalid")}, // The error message was incorrect
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("Test_%d", i), func(t *testing.T) {
+			got, tail, err := parseValue(tt.input, c, 0)
+			if fmt.Sprintf("%v", err) != fmt.Sprintf("%v", tt.err) {
+				t.Errorf("parseValue(%q) error mismatch: got %v, want %v", tt.input, err, tt.err)
+			}
+			if got == nil && tt.want == nil {
+				return
+			}
+			if got.t != tt.want.t {
+				t.Errorf("parseValue(%q) type mismatch: got %v, want %v", tt.input, got.t, tt.want.t)
+			}
+			if got.s != tt.want.s {
+				t.Errorf("parseValue(%q) value mismatch: got %q, want %q", tt.input, got.s, tt.want.s)
+			}
+			if tail != tt.tail {
+				t.Errorf("parseValue(%q) tail mismatch: got %q, want %q", tt.input, tail, tt.tail)
+			}
+		})
+	}
+}
+func TestParseArray(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected *Value
+		str      string
+		err      error
+	}{
+		// Empty array
+		{"[]", &Value{t: TypeArray, a: []*Value{}}, "", nil},
+
+		// Simple array
+		{"[1,2,3]", &Value{t: TypeArray, a: []*Value{
+			{t: TypeNumber, s: "1"},
+			{t: TypeNumber, s: "2"},
+			{t: TypeNumber, s: "3"},
+		}}, "", nil},
+
+		// Array with different types
+		{"[1,\"hello\",true]", &Value{t: TypeArray, a: []*Value{
+			{t: TypeNumber, s: "1"},
+			{t: TypeString, s: "hello"},
+			{t: TypeTrue},
+		}}, "", nil},
+
+		// Nested array
+		{"[[1,2],[3,4]]", &Value{t: TypeArray, a: []*Value{
+			{t: TypeArray, a: []*Value{
+				{t: TypeNumber, s: "1"},
+				{t: TypeNumber, s: "2"},
+			}},
+			{t: TypeArray, a: []*Value{
+				{t: TypeNumber, s: "3"},
+				{t: TypeNumber, s: "4"},
+			}},
+		}}, "", nil},
+
+		// Array with whitespace
+		{" [ 1 , 2 , 3 ] ", &Value{t: TypeArray, a: []*Value{
+			{t: TypeNumber, s: "1"},
+			{t: TypeNumber, s: "2"},
+			{t: TypeNumber, s: "3"},
+		}}, "", nil},
+
+		// Invalid array: missing ']'
+		{"[1,2,3", nil, "[1,2,3", fmt.Errorf("missing ']'")},
+
+		// Invalid array: missing ','
+		{"[1 2 3]", nil, " 2 3]", fmt.Errorf("missing ',' after array value")},
+
+		// Invalid array: unexpected end
+		{"[1,", nil, "[1,", fmt.Errorf("unexpected end of array")},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("Test_%d", i), func(t *testing.T) {
+			c := &cache{}
+			actual, str, err := parseArray(test.input, c, 0)
+
+			if test.err != nil {
+				if err == nil {
+					t.Errorf("Expected error, got nil")
+				} else if err.Error() != test.err.Error() {
+					t.Errorf("Expected error '%s', got '%s'", test.err, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %s", err)
+				} else if actual == nil {
+					t.Errorf("Unexpected nil value")
+				} else {
+					if actual.Type() != test.expected.Type() {
+						t.Errorf("Expected type %v, got %v", test.expected.Type(), actual.Type())
+					}
+					if len(actual.a) != len(test.expected.a) {
+						t.Errorf("Expected array length %d, got %d", len(test.expected.a), len(actual.a))
+					}
+					for j := 0; j < len(actual.a); j++ {
+						if actual.a[j].Type() != test.expected.a[j].Type() {
+							t.Errorf("Expected type %v for element %d, got %v", test.expected.a[j].Type(), j, actual.a[j].Type())
+						}
+						if actual.a[j].s != test.expected.a[j].s {
+							t.Errorf("Expected value '%s' for element %d, got '%s'", test.expected.a[j].s, j, actual.a[j].s)
+						}
+					}
+				}
+			}
+
+			if str != test.str {
+				t.Errorf("Expected remaining string '%s', got '%s'", test.str, str)
+			}
+		})
+	}
+}

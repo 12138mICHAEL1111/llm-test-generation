@@ -1,0 +1,195 @@
+func TestDB_Close(t *testing.T) {
+	f, _ := ioutil.TempFile("", "bolt-")
+	f.Close()
+	os.Remove(f.Name())
+	defer os.Remove(f.Name())
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to close again. Should NOT return an error
+	err = db.Close()
+	if err != nil {
+		t.Fatal("unexpected error on second close:", err)
+	}
+}
+func TestIsReadOnly(t *testing.T) {
+	// Create a temporary file for the database.
+	f, err := ioutil.TempFile("", "bolt-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	// Create a new database with read-only mode enabled.
+	db, err := bolt.Open(f.Name(), 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Verify that IsReadOnly returns true.
+	if !db.IsReadOnly() {
+		t.Error("Expected IsReadOnly to return true for a read-only database")
+	}
+}
+func TestDB_View(t *testing.T) {
+	path := "test.db"
+	defer os.Remove(path)
+
+	db, err := bolt.Open(path, 0600, nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	// Pre-populate the database with data
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte("mybucket"))
+		if err != nil {
+			return err
+		}
+		return bucket.Put([]byte("key"), []byte("value"))
+	})
+	assert.NoError(t, err)
+
+	// Test successful read transaction
+	err = db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("mybucket"))
+		assert.NotNil(t, bucket)
+		value := bucket.Get([]byte("key"))
+		assert.Equal(t, []byte("value"), value)
+		return nil
+	})
+	assert.NoError(t, err)
+
+	// Test error in read transaction
+	err = db.View(func(tx *bolt.Tx) error {
+		return assert.AnError
+	})
+	assert.Error(t, err)
+}
+func TestDB_Begin(t *testing.T) {
+	// Create a temporary database file
+	f, err := os.CreateTemp("", "bolt-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	// Open the database
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Test getting a read-only transaction
+	tx, err := db.Begin(false)
+	if err != nil {
+		t.Error("Expected no error when beginning read-only transaction, got:", err)
+	}
+	if tx == nil {
+		t.Error("Expected transaction to be non-nil")
+	}
+	tx.Rollback()
+
+	// Test getting a read-write transaction
+	tx, err = db.Begin(true)
+	if err != nil {
+		t.Error("Expected no error when beginning read-write transaction, got:", err)
+	}
+	if tx == nil {
+		t.Error("Expected transaction to be non-nil")
+	}
+	
+	// Create a bucket in the read-write transaction
+	b, err := tx.CreateBucketIfNotExists([]byte("testbucket"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put and retrieve data in the read-write transaction
+	err = b.Put([]byte("key"), []byte("value"))
+	if err != nil {
+		t.Error("Expected no error when putting data, got:", err)
+	}
+	val := b.Get([]byte("key"))
+	if string(val) != "value" {
+		t.Error("Expected value 'value', got:", string(val))
+	}
+	tx.Rollback() // Rollback to avoid affecting other tests
+}
+func TestStats_Sub(t *testing.T) {
+	// Create two Stats structs.
+	s1 := bolt.Stats{
+		FreePageN:     100,
+		PendingPageN:  200,
+		FreeAlloc:    300,
+		FreelistInuse: 400,
+		TxN:           500,
+		TxStats: bolt.TxStats{
+			PageCount: 600,
+			PageAlloc: 700,
+		},
+	}
+	s2 := bolt.Stats{
+		FreePageN:     50,
+		PendingPageN:  100,
+		FreeAlloc:    150,
+		FreelistInuse: 200,
+		TxN:           250,
+		TxStats: bolt.TxStats{
+			PageCount: 300,
+			PageAlloc: 350,
+		},
+	}
+
+	// Calculate the expected difference.
+	expected := bolt.Stats{
+		FreePageN:     s1.FreePageN - s2.FreePageN,
+		PendingPageN:  s1.PendingPageN - s2.PendingPageN,
+		FreeAlloc:    s1.FreeAlloc - s2.FreeAlloc,
+		FreelistInuse: s1.FreelistInuse - s2.FreelistInuse,
+		TxN:           s1.TxN - s2.TxN,
+		TxStats: bolt.TxStats{
+			PageCount: s1.TxStats.PageCount - s2.TxStats.PageCount,
+			PageAlloc: s1.TxStats.PageAlloc - s2.TxStats.PageAlloc,
+		},
+	}
+
+	// Call the Sub() method.
+	diff := s1.Sub(&s2)
+
+	// Check the result.
+	if diff != expected {
+		t.Errorf("Stats.Sub() returned unexpected result.\nExpected: %+v\nGot: %+v", expected, diff)
+	}
+}
+
+func TestStats_Sub_Nil(t *testing.T) {
+	// Create a Stats struct.
+	s1 := bolt.Stats{
+		FreePageN:     100,
+		PendingPageN:  200,
+		FreeAlloc:    300,
+		FreelistInuse: 400,
+		TxN:           500,
+		TxStats: bolt.TxStats{
+			PageCount: 600,
+			PageAlloc: 700,
+		},
+	}
+	// Call the Sub() method with a nil argument.
+	diff := s1.Sub(nil)
+
+	// Check the result.
+	if diff != s1 {
+		t.Errorf("Stats.Sub() returned unexpected result when other is nil.\nExpected: %+v\nGot: %+v", s1, diff)
+	}
+}

@@ -1,0 +1,434 @@
+func TestOpen(t *testing.T) {
+	path := "my.db"
+	db, err := bolt.Open(path, 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path)
+	defer db.Close()
+
+	if db == nil {
+		t.Error("expected db pointer, got nil")
+	}
+
+	if db.Path() != path {
+		t.Errorf("expected db path %s, got %s", path, db.Path())
+	}
+}
+
+func TestDB_Stats(t *testing.T) {
+	t.Parallel()
+
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Perform some operations to update the stats
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("mybucket"))
+		return err
+	})
+
+	// Get the stats
+	stats := db.Stats()
+
+	// Assert that the stats are not empty
+	if stats.FreePageN == 0 {
+		t.Error("Expected non-zero FreePageN, got 0")
+	}
+}
+
+func TestDB_Begin(t *testing.T) {
+	// You can add your test cases for the Begin function here.
+	// For example, you can test the following scenarios:
+	// - Starting a read-only transaction.
+	// - Starting a write transaction.
+	// - Starting multiple read-only transactions concurrently.
+	// - Starting multiple write transactions and verify that they are serialized.
+	// - Starting a read transaction and a write transaction in the same goroutine
+	//   and verify that the writer does not deadlock.
+	// - Opening a large database with a small InitialMmapSize and verify that
+	//   read transactions do not block write transactions.
+}
+
+func TestDB_Path(t *testing.T) {
+	f, err := ioutil.TempFile("", "bolt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	f.Close()
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if got, want := db.Path(), f.Name(); got != want {
+		t.Errorf("db.Path() = %s; want %s", got, want)
+	}
+}
+
+func TestDB_Sync(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := db.Sync(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDB_Info(t *testing.T) {
+	// Open a new database.
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Get the database info.
+	info := db.Info()
+
+	// Check that the data pointer is not nil.
+	if info.Data == 0 {
+		t.Error("expected data pointer to be non-nil")
+	}
+
+	// Check that the page size is correct.
+	if info.PageSize != 4096 {
+		t.Errorf("expected page size to be 4096, got %d", info.PageSize)
+	}
+}
+
+func TestDB_Close(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := f.Name()
+	defer os.Remove(path)
+
+	db, err := bolt.Open(path, 0666, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that Close is idempotent.
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDB_String(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"/path/to/db", `DB<"/path/to/db">`},
+		{"", `DB<"">`},
+	}
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			db := &bolt.DB{
+				path: tt.path,
+			}
+			if got := db.String(); got != tt.want {
+				t.Errorf("DB.String() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBatch(t *testing.T) {
+	f, _ := os.CreateTemp("", "bolt-batch-test")
+	defer os.Remove(f.Name())
+
+	db, _ := bolt.Open(f.Name(), 0666, nil)
+	defer db.Close()
+
+	// Update should be called only once for all calls to Batch
+	// when it is below the threshold.
+	count := 0
+	increment := func(tx *bolt.Tx) error {
+		count++
+		return nil
+	}
+
+	n := 100
+	if n > bolt.MaxBatchSize {
+		t.Fatalf("n (%d) is greater than maximum batch size (%d)", n, bolt.MaxBatchSize)
+	}
+
+	for i := 0; i < n; i++ {
+		if err := db.Batch(increment); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := db.Update(func(tx *bolt.Tx) error {
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("batch update count is off: %d != %d", count, 1)
+	}
+
+	// Verify that Batch is immediately run if the batch size is reached.
+	count = 0
+	for i := 0; i < bolt.MaxBatchSize; i++ {
+		if err := db.Batch(increment); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count != 1 {
+		t.Errorf("batch update count is off: %d != %d", count, 1)
+	}
+
+	// Verify that the timer runs if the batch is smaller than the size.
+	count = 0
+	done := make(chan struct{})
+	go func() {
+		db.Batch(func(tx *bolt.Tx) error {
+			<-done
+			return nil
+		})
+		if err := db.Update(func(tx *bolt.Tx) error {
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if count != 1 {
+			t.Errorf("batch update count is off: %d != %d", count, 1)
+		}
+	}()
+
+	// Give the batch a chance to run.
+	time.Sleep(100 * time.Millisecond)
+
+	// The batch should not have run yet.
+	if count != 0 {
+		t.Errorf("batch update count is off: %d != %d", count, 0)
+	}
+
+	// Run any outstanding batch.
+	close(done)
+	time.Sleep(100 * time.Millisecond)
+	if count != 1 {
+		t.Errorf("batch update count is off: %d != %d", count, 1)
+	}
+}
+
+func ExampleDB_Batch() {
+	// Open the database.
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer db.Close()
+
+	// Create a simple counter.
+	var counter int
+
+	// Increment the counter concurrently.
+	for i := 0; i < 100; i++ {
+		go db.Batch(func(tx *bolt.Tx) error {
+			// This function is called concurrently from multiple goroutines.
+			// This means that it must be safe for concurrent access.
+			//
+			// Bolt provides serializable transactions, so we can safely increment
+			// the counter without worrying about race conditions.
+			counter++
+			return nil
+		})
+	}
+
+	// Wait for all updates to complete.
+	time.Sleep(time.Second)
+
+	// Output:
+	// The counter is now 100
+	fmt.Printf("The counter is now %d\n", counter)
+}
+
+func TestUpdate(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-update-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Successful update
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("MyBucket"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("key"), []byte("value"))
+	})
+	if err != nil {
+		t.Error("Update failed: ", err)
+	}
+
+	// Verify update
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("MyBucket"))
+		if b == nil {
+			return bolt.ErrBucketNotFound
+		}
+		v := b.Get([]byte("key"))
+		if string(v) != "value" {
+			t.Errorf("Unexpected value: %s, expected: %s", v, "value")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error("Verification failed: ", err)
+	}
+
+	// Failing update
+	err = db.Update(func(tx *bolt.Tx) error {
+		return bolt.ErrTxNotWritable
+	})
+	if err == nil {
+		t.Error("Update should have failed but succeeded")
+	}
+
+	// Verify update did not occur
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("MyBucket"))
+		if b == nil {
+			return bolt.ErrBucketNotFound
+		}
+		v := b.Get([]byte("key"))
+		if string(v) != "value" {
+			t.Errorf("Value should not have changed: %s, expected: %s", v, "value")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error("Verification failed: ", err)
+	}
+}
+
+func TestDB_GoString(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	expected := fmt.Sprintf("bolt.DB{path:%q}", db.Path())
+	actual := db.GoString()
+
+	if expected != actual {
+		t.Errorf("Expected %q, got %q", expected, actual)
+	}
+}
+
+func TestDB_View(t *testing.T) {
+	// TODO: Implement tests for the View function.
+	//
+	// Consider testing scenarios such as:
+	// - Successful execution of a read-only function within a view.
+	// - Handling of errors returned by the function passed to View.
+	// - Ensuring that the transaction is rolled back even if the function panics.
+	// - Verifying that attempting to manually rollback within the function causes a panic.
+}
+
+func TestDB_IsReadOnly(t *testing.T) {
+	t.Run("Read-only mode", func(t *testing.T) {
+		db, err := bolt.Open("test.db", 0644, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if !db.IsReadOnly() {
+			t.Error("Expected database to be in read-only mode")
+		}
+	})
+
+	t.Run("Write mode", func(t *testing.T) {
+		db, err := bolt.Open("test.db", 0644, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if db.IsReadOnly() {
+			t.Error("Expected database to be in write mode")
+		}
+	})
+}
+
+func TestStats_Sub(t *testing.T) {
+	// Create two Stats objects with different values.
+	s1 := bolt.Stats{
+		FreePageN:     100,
+		PendingPageN:   200,
+		FreeAlloc:     300,
+		FreelistInuse: 400,
+		TxN:           500,
+		TxStats: bolt.TxStats{
+			PageCount: 600,
+			PageAlloc: 700,
+		},
+	}
+	s2 := bolt.Stats{
+		FreePageN:     50,
+		PendingPageN:   100,
+		FreeAlloc:     150,
+		FreelistInuse: 200,
+		TxN:           250,
+		TxStats: bolt.TxStats{
+			PageCount: 300,
+			PageAlloc: 350,
+		},
+	}
+
+	// Calculate the expected difference.
+	expected := bolt.Stats{
+		FreePageN:     50,
+		PendingPageN:   100,
+		FreeAlloc:     150,
+		FreelistInuse: 200,
+		TxN:           250,
+		TxStats: bolt.TxStats{
+			PageCount: 300,
+			PageAlloc: 350,
+		},
+	}
+
+	// Call the Sub method.
+	diff := s1.Sub(&s2)
+
+	// Check that the difference is as expected.
+	if diff != expected {
+		t.Errorf("Stats.Sub() returned unexpected difference. Expected: %+v, Got: %+v", expected, diff)
+	}
+}
+

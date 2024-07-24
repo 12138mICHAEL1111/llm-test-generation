@@ -1,0 +1,20 @@
+func TestTypeString(t *testing.T) {
+	tests := []struct {
+		t    Type
+		want string
+	}{
+		{TypeObject, "object"},
+		{TypeArray, "array"},
+		{TypeString, "string"},
+		{TypeNumber, "number"},
+		{TypeTrue, "true"},
+		{TypeFalse, "false"},
+		{TypeNull, "null"},
+	}
+	for i, tt := range tests {
+		if got := tt.t.String(); got != tt.want {
+			t.Errorf("test[%d] - String() = %v, want %v", i, got, tt.want)
+		}
+	}
+}
+

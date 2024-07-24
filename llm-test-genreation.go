@@ -161,7 +161,7 @@ func extractFunctionLevel_2(filename string, typeFile string, repo string) map[s
 			}
 			funcStr = funcStr + addOptionForBoltdb(repo, paramsTypeList, 2)
 
-			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/boltdb/funSig_2.json")
+			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/fastjson/funSig_2.json")
 
 			if repo == "fastjson" {
 				funcStr += fastjsonPackageInfo.Conststr_2
@@ -229,7 +229,7 @@ func extractFunctionLevel_3(filename string, typeFile string, repo string) map[s
 			}
 			funcStr = funcStr + addOptionForBoltdb(repo, paramsTypeList, 3)
 
-			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/boltdb/funSig_3.json")
+			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/fastjson/funSig_3.json")
 
 			if repo == "fastjson" {
 				funcStr += fastjsonPackageInfo.Conststr_3

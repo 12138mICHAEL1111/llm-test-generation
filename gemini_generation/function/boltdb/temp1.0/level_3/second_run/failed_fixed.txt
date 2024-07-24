@@ -1,0 +1,155 @@
+func TestDB_Stats(t *testing.T) {
+	t.Parallel()
+
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Perform some operations to update the stats
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("mybucket"))
+		if err != nil {
+			return err
+		}
+		return tx.Bucket([]byte("mybucket")).Put([]byte("key"), []byte("value"))
+	})
+
+	// Get the stats
+	stats := db.Stats()
+
+	// Assert that the stats are not empty
+	if stats.FreePageN == 0 {
+		t.Error("Expected non-zero FreePageN, got 0")
+	}
+}
+func TestStats_Sub(t *testing.T) {
+	// Create two Stats objects with different values.
+	s1 := bolt.Stats{
+		FreePageN:     100,
+		PendingPageN:   200,
+		FreeAlloc:     300,
+		FreelistInuse: 400,
+		TxN:           500,
+		TxStats: bolt.TxStats{
+			PageCount: 600,
+			PageAlloc: 700,
+		},
+	}
+	s2 := bolt.Stats{
+		FreePageN:     50,
+		PendingPageN:   100,
+		FreeAlloc:     150,
+		FreelistInuse: 200,
+		TxN:           250,
+		TxStats: bolt.TxStats{
+			PageCount: 300,
+			PageAlloc: 350,
+		},
+	}
+
+	// Calculate the expected difference.
+	expected := bolt.Stats{
+		FreePageN:     s1.FreePageN - s2.FreePageN,
+		PendingPageN:   s1.PendingPageN - s2.PendingPageN,
+		FreeAlloc:     s1.FreeAlloc - s2.FreeAlloc,
+		FreelistInuse: s1.FreelistInuse - s2.FreelistInuse,
+		TxN:           s1.TxN - s2.TxN,
+		TxStats:       s1.TxStats.Sub(&s2.TxStats),
+	}
+
+	// Call the Sub method.
+	diff := s1.Sub(&s2)
+
+	// Check that the difference is as expected.
+	if diff != expected {
+		t.Errorf("Stats.Sub() returned unexpected difference. Expected: %+v, Got: %+v", expected, diff)
+	}
+}
+func TestDB_Begin(t *testing.T) {
+	f, err := ioutil.TempFile("", "bolt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	// Open the database
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Test that we can begin a read-only transaction
+	tx, err := db.Begin(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tx.Writable() {
+		t.Error("expected read-only transaction")
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test that we can begin a write transaction
+	tx, err = db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tx.Writable() {
+		t.Error("expected writable transaction")
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test that multiple read-only transactions can be opened concurrently
+	tx1, err := db.Begin(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx1.Rollback()
+	tx2, err := db.Begin(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx2.Rollback()
+
+	// Test that multiple write transactions are serialized
+	done := make(chan struct{})
+	go func() {
+		// Ensure the database is open before attempting the transaction
+		if db == nil {
+			t.Error("database not open")
+			return
+		}
+		tx, err := db.Begin(true)
+		if err != nil {
+			t.Error(err)
+			return 
+		}
+		defer tx.Rollback()
+		// Sleep a short time to allow the other transaction to start
+		time.Sleep(10 * time.Millisecond)
+		close(done)
+	}()
+	// Ensure the database is open before attempting the transaction
+	if db == nil {
+		t.Error("database not open")
+		return
+	}
+	tx, err = db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	// Wait for the other transaction to finish
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Error("timed out waiting for second write transaction")
+	}
+}

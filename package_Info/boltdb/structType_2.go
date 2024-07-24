@@ -119,4 +119,5 @@ type Options struct {
 	NoGrowSync bool
 	ReadOnly bool
 	MmapFlags int
-}`}
+}`,
+}

@@ -1,0 +1,433 @@
+func TestDB_String(t *testing.T) {
+	db, _ := bolt.Open("my.db", 0600, nil)
+	defer db.Close()
+
+	expected := fmt.Sprintf("DB<%q>", db.Path())
+	if db.String() != expected {
+		t.Errorf("db.String() = %v, want %v", db.String(), expected)
+	}
+}
+func TestDB_GoString(t *testing.T) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	expected := fmt.Sprintf("bolt.DB{path:%q}", db.Path())
+	if got := db.GoString(); got != expected {
+		t.Errorf("GoString() = %q, want %q", got, expected)
+	}
+}
+func TestBatch(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-batch-")
+	assert.NoError(t, err)
+	defer os.Remove(f.Name())
+
+	db, err := bolt.Open(f.Name(), 0666, nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	// Update should work within a batch.
+	err = db.Batch(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("widgets"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+		return b.Put([]byte("foo"), []byte("bar"))
+	})
+	assert.NoError(t, err)
+
+	// Concurrent Batch calls should be executed serially.
+	done := make(chan struct{})
+	go func() {
+		err := db.Batch(func(tx *bolt.Tx) error {
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		})
+		assert.NoError(t, err)
+		close(done)
+	}()
+	err = db.Batch(func(tx *bolt.Tx) error {
+		<-done
+		return nil
+	})
+	assert.NoError(t, err)
+}
+func TestDB_Begin(t *testing.T) {
+	f, _ := ioutil.TempFile("", "bolt-")
+	f.Close()
+	defer os.Remove(f.Name())
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Start a read-only transaction.
+	tx, err := db.Begin(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	// Attempt to start a write transaction.
+	_, err = db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestBoltDB_Update(t *testing.T) {
+	f, _ := ioutil.TempFile("", "bolt-update-")
+	defer os.Remove(f.Name())
+	db, _ := bolt.Open(f.Name(), 0600, nil)
+	defer db.Close()
+
+	// Successful update
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("MyBucket"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+		return b.Put([]byte("key"), []byte("value"))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Failed update with rollback
+	err = db.Update(func(tx *bolt.Tx) error {
+		return fmt.Errorf("failing transaction")
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// Verify data after rollback
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("MyBucket"))
+		if b == nil {
+			return fmt.Errorf("bucket not found")
+		}
+		value := b.Get([]byte("key"))
+		if string(value) != "value" {
+			t.Errorf("unexpected value: %s", value)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestBoltDB_Close(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert data to ensure there's something to clean up
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("testBucket"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("testKey"), []byte("testData"))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Close the database
+	err = db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to reopen the database
+	db, err = bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Verify that the data is still accessible
+	err = db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("testBucket"))
+		if b == nil {
+			return bolt.ErrBucketNotFound // Correctly access error from bolt package
+		}
+		value := b.Get([]byte("testKey"))
+		if value == nil {
+			return bolt.ErrKeyNotFound // Correctly access error from bolt package
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+func TestOpen(t *testing.T) {
+	path := "test.db"
+	defer os.Remove(path)
+
+	// Test opening a database with default options.
+	db, err := bolt.Open(path, 0666, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test opening a database with read-only mode.
+	db, err = bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test opening a database with custom options.
+	db, err = bolt.Open(path, 0666, &bolt.Options{
+		Timeout:          100,
+		NoGrowSync:       true,
+		InitialMmapSize: 1024 * 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestDB_Info(t *testing.T) {
+	// Open a Bolt database.
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Get the database info.
+	info := db.Info()
+
+	// Check the data pointer is not nil.
+	if info.Data == 0 {
+		t.Error("Data pointer is nil")
+	}
+
+	// Check the page size is valid.
+	if info.PageSize <= 0 {
+		t.Errorf("Invalid page size: %d", info.PageSize)
+	}
+}
+func TestDB_Sync(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-sync-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Should not error
+	if err := db.Sync(); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestDB_View(t *testing.T) {
+	t.Run("successful view", func(t *testing.T) {
+		db, err := bolt.Open("test.db", 0600, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		err = db.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte("myBucket"))
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = db.View(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte("anotherBucket"))
+			if err == nil {
+				t.Error("expected error, got nil")
+			}
+			return nil
+		})
+
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("view returns error", func(t *testing.T) {
+		db, err := bolt.Open("test.db", 0600, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		expectedErr := errors.New("test error") 
+		err = db.View(func(tx *bolt.Tx) error {
+			return expectedErr 
+		})
+
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+
+		if !errors.Is(err, expectedErr) {
+			t.Errorf("expected error '%v', got '%v'", expectedErr, err)
+		}
+	})
+}
+func TestDB_IsReadOnly(t *testing.T) {
+	t.Run("Read-only mode", func(t *testing.T) {
+		f, err := os.CreateTemp("", "bolt-test-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+
+		db, err := bolt.Open(f.Name(), 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if !db.IsReadOnly() {
+			t.Error("Expected database to be read-only")
+		}
+	})
+
+	t.Run("Write mode", func(t *testing.T) {
+		f, err := os.CreateTemp("", "bolt-test-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+
+		db, err := bolt.Open(f.Name(), 0600, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if db.IsReadOnly() {
+			t.Error("Expected database to be writable")
+		}
+	})
+}
+func TestDB_Path(t *testing.T) {
+	f, err := ioutil.TempFile("", "bolt-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	f.Close()
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if got, want := db.Path(), f.Name(); got != want {
+		t.Errorf("db.Path() = %s, want %s", got, want)
+	}
+}
+func TestDB_Stats(t *testing.T) {
+	// Open a database.
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Perform some operations to update the stats.
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("mybucket"))
+		return err
+	})
+
+	// Retrieve the stats.
+	stats := db.Stats()
+
+	// Assert that the stats are not empty.
+	if stats.FreePageN == 0 {
+		t.Error("expected non-empty stats")
+	}
+}
+func TestStats_Sub(t *testing.T) {
+	// Create two Stats structs with different values.
+	s1 := &bolt.Stats{
+		FreePageN:     1,
+		PendingPageN:  2,
+		FreeAlloc:    3,
+		FreelistInuse: 4,
+		TxN:           5,
+		TxStats: bolt.TxStats{
+			PageCount: 6,
+			PageAlloc: 7,
+		},
+	}
+	s2 := &bolt.Stats{
+		FreePageN:     10,
+		PendingPageN:  20,
+		FreeAlloc:    30,
+		FreelistInuse: 40,
+		TxN:           50,
+		TxStats: bolt.TxStats{
+			PageCount: 60,
+			PageAlloc: 70,
+		},
+	}
+
+	// Calculate the difference between the two Stats structs.
+	diff := s1.Sub(s2)
+
+	// Verify that the difference is calculated correctly.
+	if diff.FreePageN != s1.FreePageN {
+		t.Errorf("Expected FreePageN to be %d, got %d", s1.FreePageN, diff.FreePageN)
+	}
+	if diff.PendingPageN != s1.PendingPageN {
+		t.Errorf("Expected PendingPageN to be %d, got %d", s1.PendingPageN, diff.PendingPageN)
+	}
+	if diff.FreeAlloc != s1.FreeAlloc {
+		t.Errorf("Expected FreeAlloc to be %d, got %d", s1.FreeAlloc, diff.FreeAlloc)
+	}
+	if diff.FreelistInuse != s1.FreelistInuse {
+		t.Errorf("Expected FreelistInuse to be %d, got %d", s1.FreelistInuse, diff.FreelistInuse)
+	}
+	if diff.TxN != s1.TxN-s2.TxN {
+		t.Errorf("Expected TxN to be %d, got %d", s1.TxN-s2.TxN, diff.TxN)
+	}
+	if diff.TxStats.PageCount != s1.TxStats.PageCount-s2.TxStats.PageCount {
+		t.Errorf("Expected TxStats.PageCount to be %d, got %d", s1.TxStats.PageCount-s2.TxStats.PageCount, diff.TxStats.PageCount)
+	}
+	if diff.TxStats.PageAlloc != s1.TxStats.PageAlloc-s2.TxStats.PageAlloc {
+		t.Errorf("Expected TxStats.PageAlloc to be %d, got %d", s1.TxStats.PageAlloc-s2.TxStats.PageAlloc, diff.TxStats.PageAlloc)
+	}
+
+	// Test case for subtracting nil Stats
+	diff2 := s1.Sub(nil)
+	if diff2.TxN != s1.TxN {
+		t.Errorf("Expected TxN to be %d, got %d", s1.TxN, diff2.TxN)
+	}
+}

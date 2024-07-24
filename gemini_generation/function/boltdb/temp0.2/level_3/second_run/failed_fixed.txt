@@ -1,0 +1,133 @@
+func TestDB_Begin(t *testing.T) {
+	f, _ := ioutil.TempFile("", "bolt-")
+	f.Close()
+	defer os.Remove(f.Name())
+
+	db, err := bolt.Open(f.Name(), 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Start a read-only transaction.
+	tx, err := db.Begin(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Close the read-only transaction before opening a write transaction
+	tx.Rollback() 
+
+	// Attempt to start a write transaction.
+	tx, err = db.Begin(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+}
+func TestDB_Stats(t *testing.T) {
+	// Open a database.
+	db, err := bolt.Open("my.db", 0600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Perform an update operation within a transaction.
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte("mybucket"))
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrieve the stats. They should be updated now that the transaction is committed.
+	stats := db.Stats()
+
+	// Assert that the stats are not empty.
+	if stats.FreePageN == 0 {
+		t.Error("expected non-empty stats")
+	}
+}
+func TestBatch(t *testing.T) {
+	f, err := os.CreateTemp("", "bolt-batch-")
+	assert.NoError(t, err)
+	defer os.Remove(f.Name())
+
+	db, err := bolt.Open(f.Name(), 0666, nil)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	// Update should work within a batch.
+	err = db.Batch(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("widgets"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+		return b.Put([]byte("foo"), []byte("bar"))
+	})
+	assert.NoError(t, err)
+
+	// Concurrent Batch calls should be executed serially.
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		err := db.Batch(func(tx *bolt.Tx) error {
+			time.Sleep(100 * time.Millisecond) // Simulate some work
+			return nil
+		})
+		assert.NoError(t, err)
+	}()
+
+	go func() {
+		defer wg.Done()
+		err := db.Batch(func(tx *bolt.Tx) error {
+			time.Sleep(50 * time.Millisecond) // Simulate some work
+			return nil
+		})
+		assert.NoError(t, err)
+	}()
+
+	wg.Wait()
+}
+func TestDB_IsReadOnly(t *testing.T) {
+	t.Run("Read-only mode", func(t *testing.T) {
+		f, err := os.CreateTemp("", "bolt-test-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+		f.Close() // Close the file before opening with bolt
+
+		db, err := bolt.Open(f.Name(), 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if !db.IsReadOnly() {
+			t.Error("Expected database to be read-only")
+		}
+	})
+
+	t.Run("Write mode", func(t *testing.T) {
+		f, err := os.CreateTemp("", "bolt-test-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+		f.Close() // Close the file before opening with bolt
+
+		db, err := bolt.Open(f.Name(), 0600, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+
+		if db.IsReadOnly() {
+			t.Error("Expected database to be writable")
+		}
+	})
+}

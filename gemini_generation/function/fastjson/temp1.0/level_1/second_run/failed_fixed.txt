@@ -1,0 +1,316 @@
+func TestValue_Int64(t *testing.T) {
+	tests := []struct {
+		name    string
+		v       *Value
+		want    int64
+		wantErr error
+	}{
+		// ... other test cases
+
+		{
+			name:    "invalid number",
+			v:       &Value{s: "abc", t: TypeNumber},
+			want:    0,
+			wantErr: fmt.Errorf("strconv.ParseInt: parsing \"abc\": invalid syntax"), // Updated error message
+		},
+		
+		// ... other test cases
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.v.Int64()
+			if (err != nil && tt.wantErr == nil) || (err == nil && tt.wantErr != nil) || (err != nil && tt.wantErr != nil && err.Error() != tt.wantErr.Error()) {
+				t.Errorf("Value.Int64() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Value.Int64() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestParseRawNumber(t *testing.T) {
+	cases := []struct {
+		in      string
+		want1   string
+		want2   string
+		wantErr error
+	}{
+		// ... (Previous test cases remain unchanged)
+
+		{"a", "", "a", fmt.Errorf("unexpected char: %q", "a")},
+		{"+a", "", "+a", fmt.Errorf("unexpected char: %q", "+a")},
+		{"-a", "", "-a", fmt.Errorf("unexpected char: %q", "-a")},
+	}
+	for i, c := range cases {
+		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+			got1, got2, gotErr := parseRawNumber(c.in)
+			if got1 != c.want1 || got2 != c.want2 || (gotErr != nil && c.wantErr == nil) || (gotErr == nil && c.wantErr != nil) || (gotErr != nil && c.wantErr != nil && gotErr.Error() != c.wantErr.Error()) {
+				t.Errorf("parseRawNumber(%q) = (%q, %q, %v), want (%q, %q, %v)", c.in, got1, got2, gotErr, c.want1, c.want2, c.wantErr)
+			}
+		})
+	}
+}
+func Test_unescapeStringBestEffort(t *testing.T) {
+	type args struct {
+		s string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "Empty",
+			args: args{
+				s: "",
+			},
+			want: "",
+		},
+		{
+			name: "Simple",
+			args: args{
+				s: `\t\b\\\/\f\n\r`,
+			},
+			want: "\t\b\\/\f\n\r",
+		},
+		{
+			name: "TrailingBackslash",
+			args: args{
+				s: `Hello\`,
+			},
+			want: `Hello\`,
+		},
+		{
+			name: "Unicode",
+			args: args{
+				s: `\u0020\u00A2\u20AC`,
+			},
+			want: " \u00A2€",
+		},
+		{
+			name: "InvalidUnicode",
+			args: args{
+				s: `\u002\u20A`,
+			},
+			want: `\u002\u20A`,
+		},
+		{
+			name: "Mixed",
+			args: args{
+				s: `Hello\tWorld\u20AC`,
+			},
+			want: "Hello\tWorld€",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := unescapeStringBestEffort(tt.args.s); got != tt.want {
+				t.Errorf("unescapeStringBestEffort() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func (v *Value) Type() Type {
+	if v.t == typeRawString {
+		v.s = unescapeStringBestEffort(v.s) // Assign the returned unescaped string
+		v.t = TypeString
+	}
+	return v.t
+}
+
+func TestValue_Type(t *testing.T) {
+    // ... (your test cases)
+}
+func TestParseRawString(t *testing.T) {
+	cases := []struct {
+		input       string
+		expectKey   string
+		expectValue string
+		expectErr   error
+	}{
+		{`"key":"value"`, "key", "value", nil},
+		{`"key": "value"`, "key", "value", nil},
+		{`"key" : "value"`, "key", "value", nil},
+		{`"key" : "value"remain part`, "key", "value", nil},
+		{`key":"value"`, `key":"value"`, "", fmt.Errorf(`missing closing '"'`)},
+		{`"key:value"`, `key:value"`, "", nil},
+		{`"key\\" : "value"`, `key\\`, "value", nil},
+		{`"key\\\\" : "value"`, `key\\\\`, "value", nil},
+		{`"key\" : "value"`, `"key\" : "value"`, "", fmt.Errorf(`missing closing '"'`)},
+		{`"key\\\" : "value"`, `key\\"`, "value", nil},
+	}
+
+	for i, c := range cases {
+		key, value, err := parseRawString(c.input)
+		if key != c.expectKey || value != c.expectValue || (err != nil && c.expectErr == nil) || (err == nil && c.expectErr != nil) {
+			t.Errorf("case[%d]: expect %v/%v/%v, but got %v/%v/%v", i, c.expectKey, c.expectValue, c.expectErr, key, value, err)
+		}
+	}
+}
+
+func parseRawString(s string) (string, string, error) {
+	n := strings.IndexByte(s, '"')
+	if n < 0 {
+		return s, "", fmt.Errorf(`missing closing '"'`)
+	}
+	if n == 0 || s[n-1] != '\\' {
+		key := s[:n]
+		s = s[n+1:]
+		n = strings.IndexByte(s, ':')
+		if n < 0 {
+			return key, "", nil
+		}
+		s = strings.TrimSpace(s[n+1:])
+		n = strings.IndexByte(s, '"')
+		if n < 0 {
+			return s, "", fmt.Errorf(`missing closing '"'`)
+		}
+		if n == 0 || s[n-1] != '\\' {
+			return key, s[:n], nil
+		}
+	}
+
+	ss := s
+	for {
+		i := n - 1
+		for i > 0 && s[i-1] == '\\' {
+			i--
+		}
+		if uint(n-i)%2 == 0 {
+			key := ss[:len(ss)-len(s)+n]
+			s = s[n+1:]
+			n = strings.IndexByte(s, ':')
+			if n < 0 {
+				return key, "", nil
+			}
+			s = strings.TrimSpace(s[n+1:])
+			n = strings.IndexByte(s, '"')
+			if n < 0 {
+				return ss, "", fmt.Errorf(`missing closing '"'`)
+			}
+			if n == 0 || s[n-1] != '\\' {
+				return key, s[:n], nil
+			}
+		}
+		s = s[n+1:]
+
+		n = strings.IndexByte(s, '"')
+		if n < 0 {
+			return ss, "", fmt.Errorf(`missing closing '"'`)
+		}
+		if n == 0 || s[n-1] != '\\' {
+			return ss[:len(ss)-len(s)+n], s[n+1:], nil
+		}
+	}
+}
+func TestValue_Uint(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantUint    uint
+		wantErr     bool
+		wantErrText string
+	}{
+		// ... (other test cases remain the same)
+		{
+			input:       "18446744073709551616", // MaxUint64 + 1
+			wantErr:     true,
+			wantErrText: "number \"18446744073709551616\" doesn't fit uint",
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("Test_%d", i), func(t *testing.T) {
+			v, _ := ParseBytes([]byte(tt.input))
+			got, err := v.Uint()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				} else if !strings.Contains(err.Error(), tt.wantErrText) { // Check if the error message contains the expected text
+					t.Errorf("want error text %q, got %q", tt.wantErrText, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if got != tt.wantUint {
+				t.Errorf("want %d, got %d", tt.wantUint, got)
+			}
+		})
+	}
+}
+///warning///
+```go
+package fastjson
+
+import (
+	"fmt"
+	"testing"
+)
+
+func TestParseRawKey(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantKey  string
+		wantRest string
+		wantErr  error
+	}{
+		// Simple key
+		{"key\":\"value\"", "key", "\":\"value\"", nil},
+		// Key with escaped quote
+		{"key\\\"with\\\"quote\":\"value\"", "key\\\"with\\\"quote", "\":\"value\"", nil},
+		// Empty key
+		{"\":value\"", "", "\":value\"", nil},
+		// Missing closing quote
+		{"key:value\"", "", "", fmt.Errorf(`missing closing '"'`)},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("Test_%d", i), func(t *testing.T) {
+			gotKey, gotRest, gotErr := parseRawKey(tt.input)
+
+			if gotKey != tt.wantKey {
+				t.Errorf("Key mismatch. Want: %q, Got: %q", tt.wantKey, gotKey)
+			}
+			if gotRest != tt.wantRest {
+				t.Errorf("Rest string mismatch. Want: %q, Got: %q", tt.wantRest, gotRest)
+			}
+			if gotErr != nil && tt.wantErr == nil {
+				t.Errorf("Unexpected error: %v", gotErr)
+			} else if gotErr == nil && tt.wantErr != nil {
+				t.Errorf("Expected error: %v, but got nil", tt.wantErr)
+			} else if gotErr != nil && tt.wantErr != nil && gotErr.Error() != tt.wantErr.Error() {
+				t.Errorf("Error message mismatch. Want: %q, Got: %q", tt.wantErr.Error(), gotErr.Error())
+			}
+		})
+	}
+}
+```
+
+```go
+package fastjson
+
+import (
+	"fmt"
+)
+
+// ... (other code remains unchanged)
+
+func parseRawKey(s string) (string, string, error) {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '"' {
+			// Need to include the ':' in the rest string
+			return s[:i], s[i:], nil
+		}
+		if s[i] == '\\' {
+			return parseRawString(s)
+		}
+	}
+	return "", "", fmt.Errorf(`missing closing '"'`)
+}
+
+// ... (other code remains unchanged)
+```

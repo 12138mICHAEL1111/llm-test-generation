@@ -23,8 +23,8 @@ func geminiChat(model *genai.GenerativeModel, prompt string, messages []*genai.C
 	resp, err := cs.SendMessage(context.Background(), genai.Text(prompt))
 
 	if err != nil {
-		fmt.Println(prompt)
-		panic(err)
+		fmt.Println(222)
+		return ""
 	}
 
 	c, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
@@ -138,6 +138,12 @@ func geminiRepairCompilation(model *genai.GenerativeModel, historyFile string, e
 		panic(err)
 	}
 
+	testfile, err := os.OpenFile(testFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer testfile.Close()
+
 	for targetName, errorMsg := range errors {
 		wg.Add(1)
 		sem <- struct{}{}
@@ -169,6 +175,10 @@ func geminiRepairCompilation(model *genai.GenerativeModel, historyFile string, e
 								genai.Text(completion),
 							},
 						})
+					extractedFunctions := extractedGeneratedCode(string(completion))
+					if _, err := testfile.WriteString(extractedFunctions + "\n"); err != nil {
+						panic(err)
+					}
 					mutex.Unlock()
 
 				}
@@ -281,6 +291,12 @@ func geminiRepairFailing(model *genai.GenerativeModel, historyFile string, error
 		panic(err)
 	}
 
+	testfile, err := os.OpenFile(testFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer testfile.Close()
+
 	for targetName, errorMsg := range errors {
 		wg.Add(1)
 		sem <- struct{}{}
@@ -318,6 +334,9 @@ func geminiRepairFailing(model *genai.GenerativeModel, historyFile string, error
 						})
 					_, err := file.WriteString(extractedFunctions + "\n")
 					if err != nil {
+						panic(err)
+					}
+					if _, err := testfile.WriteString(extractedFunctions + "\n"); err != nil {
 						panic(err)
 					}
 					mutex.Unlock()

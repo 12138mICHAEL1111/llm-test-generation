@@ -153,31 +153,7 @@ type Stats struct {
 
 	TxStats TxStats // global, ongoing stats.
 },
-type TxStats struct {
-	// Page statistics.
-	PageCount int // number of page allocations
-	PageAlloc int // total bytes allocated
-
-	// Cursor statistics.
-	CursorCount int // number of cursors created
-
-	// Node statistics
-	NodeCount int // number of node allocations
-	NodeDeref int // number of node dereferences
-
-	// Rebalance statistics.
-	Rebalance     int           // number of node rebalances
-	RebalanceTime time.Duration // total time spent rebalancing
-
-	// Split/Spill statistics.
-	Split     int           // number of nodes split
-	Spill     int           // number of nodes spilled
-	SpillTime time.Duration // total time spent spilling
-
-	// Write statistics.
-	Write     int           // number of writes performed
-	WriteTime time.Duration // total time spent writing to disk
-}`,
+`,
 	"call": `type call struct {
 	fn  func(*Tx) error
 	err chan<- error
@@ -217,4 +193,30 @@ type Options struct {
 	// If initialMmapSize is smaller than the previous database size,
 	// it takes no effect.
 	InitialMmapSize int
+}`,
+	"TxStats": `// TxStats represents statistics about the actions performed by the transaction.
+type TxStats struct {
+	// Page statistics.
+	PageCount int // number of page allocations
+	PageAlloc int // total bytes allocated
+
+	// Cursor statistics.
+	CursorCount int // number of cursors created
+
+	// Node statistics
+	NodeCount int // number of node allocations
+	NodeDeref int // number of node dereferences
+
+	// Rebalance statistics.
+	Rebalance     int           // number of node rebalances
+	RebalanceTime time.Duration // total time spent rebalancing
+
+	// Split/Spill statistics.
+	Split     int           // number of nodes split
+	Spill     int           // number of nodes spilled
+	SpillTime time.Duration // total time spent spilling
+
+	// Write statistics.
+	Write     int           // number of writes performed
+	WriteTime time.Duration // total time spent writing to disk
 }`}

@@ -43,14 +43,16 @@
     ],
     "Stats": [
         "DB",
-        "Stats"
+        "Stats",
+        "TxStats"
     ],
     "String": [
         "DB",
         "string"
     ],
     "Sub": [
-        "Stats"
+        "Stats",
+        "TxStats"
     ],
     "Sync": [
         "DB",
@@ -72,7 +74,8 @@
         ""
     ],
     "add": [
-        "Stats"
+        "Stats",
+        "TxStats"
     ],
     "allocate": [
         "DB",

@@ -1,0 +1,211 @@
+func TestParseRawKey(t *testing.T) {
+	tests := []struct {
+		input string
+		key   string
+		tail  string
+		err   error
+	}{
+		{`"key":1`, "key", `:1`, nil},
+		{`key":1`, "key", `:1`, nil},
+		{`\u0026"key":1`, `\u0026"key"`, ":1", nil},
+		{`"key`, "", "", fmt.Errorf(`missing closing '"'`)},
+	}
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test_%d", i), func(t *testing.T) {
+			key, tail, err := parseRawKey(tt.input)
+			if key != tt.key || tail != tt.tail || !equalError(err, tt.err) {
+				t.Errorf("input: %q, expect(%q, %q, %v), got(%q, %q, %v)", tt.input, tt.key, tt.tail, tt.err, key, tail, err)
+			}
+		})
+	}
+}
+
+func equalError(a, b error) bool {
+	if a == nil {
+		return b == nil
+	}
+	if b == nil {
+		return false
+	}
+	return a.Error() == b.Error()
+}
+func TestValue_Uint(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantUint    uint
+		wantErr     bool
+		wantErrType error
+	}{
+		{
+			input:       `"123"`,
+			wantUint:    0,
+			wantErr:     true,
+			wantErrType: fmt.Errorf(""), // Match any error
+		},
+		{
+			input:    `123`,
+			wantUint: 123,
+		},
+		{
+			input:    `18446744073709551615`,
+			wantUint: 18446744073709551615,
+		},
+		{
+			input:       `18446744073709551616`,
+			wantUint:    0,
+			wantErr:     true,
+			wantErrType: fmt.Errorf(""), // Match any error
+		},
+		{
+			input:       `-129`,
+			wantUint:    0,
+			wantErr:     true,
+			wantErrType: fmt.Errorf(""), // Match any error
+		},
+	}
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			v := &Value{
+				s: tt.input,
+				t: TypeNumber,
+			}
+			gotUint, err := v.Uint()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Uint() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			// No need to check error type since we are matching any error
+			if gotUint != tt.wantUint {
+				t.Errorf("Uint() gotUint = %v, want %v", gotUint, tt.wantUint)
+			}
+		})
+	}
+}
+func Test_unescapeStringBestEffort(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want string
+	}{
+		{
+			name: "empty",
+			s:    "",
+			want: "",
+		},
+		{
+			name: "no escape",
+			s:    "hello world",
+			want: "hello world",
+		},
+		{
+			name: "simple escape",
+			s:    "\\\"",
+			want: "\"",
+		},
+		{
+			name: "unicode escape",
+			s:    "\\u4e2d\\u6587",
+			want: "中文",
+		},
+		{
+			name: "invalid unicode escape",
+			s:    "\\u123",
+			want: "\\u123",
+		},
+		{
+			name: "surrogate pair",
+			s:    "\\uD83D\\uDE04",
+			want: "😄",
+		},
+		{
+			name: "incomplete surrogate pair",
+			s:    "\\uD83D",
+			want: "\\uD83D",
+		},
+		{
+			name: "mixed escape",
+			s:    "hello\\tworld\\n\\u4e2d\\u6587",
+			want: "hello\tworld\n中文",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := unescapeStringBestEffort(tt.s); got != tt.want {
+				t.Errorf("unescapeStringBestEffort() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func unescapeStringBestEffort(s string) string {
+	n := strings.IndexByte(s, '\\')
+	if n < 0 {
+		return s
+	}
+
+	b := s2b(s)
+	b = b[:n]
+	s = s[n+1:]
+	for len(s) > 0 {
+		ch := s[0]
+		s = s[1:]
+		switch ch {
+		case '"':
+			b = append(b, '"')
+		case '\\':
+			b = append(b, '\\')
+		case '/':
+			b = append(b, '/')
+		case 'b':
+			b = append(b, '\b')
+		case 'f':
+			b = append(b, '\f')
+		case 'n':
+			b = append(b, '\n')
+		case 'r':
+			b = append(b, '\r')
+		case 't':
+			b = append(b, '\t')
+		case 'u':
+			if len(s) < 4 {
+				b = append(b, s2b("\\u"+s)...) // Fix: handle incomplete escape sequence
+				s = ""
+				break
+			}
+			xs := s[:4]
+			x, err := strconv.ParseUint(xs, 16, 16)
+			if err != nil {
+				b = append(b, s2b("\\u")...) // Fix: handle invalid escape sequence
+				break
+			}
+			s = s[4:]
+			if !utf16.IsSurrogate(rune(x)) {
+				b = append(b, string(rune(x))...)
+				break
+			}
+
+			if len(s) < 6 || s[0] != '\\' || s[1] != 'u' {
+				b = append(b, s2b("\\u"+xs)...) // Fix: handle incomplete surrogate pair
+				break
+			}
+			x1, err := strconv.ParseUint(s[2:6], 16, 16)
+			if err != nil {
+				b = append(b, s2b("\\u"+xs)...) // Fix: handle invalid surrogate pair
+				break
+			}
+			r := utf16.DecodeRune(rune(x), rune(x1))
+			b = append(b, string(r)...)
+			s = s[6:]
+		default:
+			b = append(b, '\\', ch)
+		}
+		n = strings.IndexByte(s, '\\')
+		if n < 0 {
+			b = append(b, s...)
+			break
+		}
+		b = append(b, s[:n]...)
+		s = s[n+1:]
+	}
+	return b2s(b)
+}

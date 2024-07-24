@@ -1,383 +1,414 @@
-func TestArgsort(t *testing.T) {
-	dst := []float64{3.5, 1.2, 4.7, 2.1}
-	inds := make([]int, len(dst))
-	Argsort(dst, inds)
-
-	// Check if dst is sorted in increasing order
-	for i := 0; i < len(dst)-1; i++ {
-		if dst[i] > dst[i+1] {
-			t.Errorf("dst is not sorted in increasing order")
-		}
+func TestNearestIdx(t *testing.T) {
+	s := []float64{1, 2, 3, 4, 5, 4, 3, 2, 1}
+	type args struct {
+		s []float64
+		v float64
 	}
-
-	// Check if inds contains the original positions of elements in dst
-	origDst := make([]float64, len(dst))
-	copy(origDst, dst)
-	sort.Float64s(origDst)
-
-	for i := 0; i < len(inds); i++ {
-		if dst[i] != origDst[inds[i]] {
-			t.Errorf("inds does not contain original positions")
-		}
-	}
-}
-func TestMax(t *testing.T) {
 	tests := []struct {
-		input    []float64
-		expected float64
+		name string
+		args args
+		want int
 	}{
-		{[]float64{1.0, 2.0, 3.0}, 3.0},
-		{[]float64{-1.0, -2.0, -3.0}, -1.0},
-		{[]float64{5.5, 2.2, 3.3, 4.4}, 5.5},
+		{"first", args{s, -1}, 0},
+		{"last", args{s, 10}, 8},
+		{"exact", args{s, 3}, 2},
+		{"firstNear", args{s, 2.1}, 1},
+		{"secondNear", args{s, 3.9}, 3},
+		{"NaN", args{s, math.NaN()}, 0},
+		{"Inf", args{s, math.Inf(1)}, 4},
+		{"NInf", args{s, math.Inf(-1)}, 0},
 	}
-
-	for _, test := range tests {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NearestIdx(tt.args.s, tt.args.v)
+			if got != tt.want {
+				t.Errorf("NearestIdx() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	// test that it panics when s is zero length
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		}
+	}()
+	NearestIdx([]float64{}, 0)
+}
+func TestMaxIdx(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		s        []float64
+		wantIdx  int
+		wantPanic bool
+	}{
+		{[]float64{1, 2, 3, 4}, 3, false},
+		{[]float64{4, 3, 2, 1}, 0, false},
+		{[]float64{1, 4, 3, 2}, 1, false},
+		{[]float64{1, 2, 4, 3}, 2, false},
+		{[]float64{1, 2, 2, 1}, 1, false},
+		{[]float64{-1, -2, -3, -4}, 0, false},
+		{[]float64{-4, -3, -2, -1}, 3, false},
+		{[]float64{0, math.Inf(1), math.Inf(-1)}, 1, false},
+		{[]float64{math.Inf(-1), math.Inf(1), 0}, 1, false},
+		{[]float64{math.NaN(), math.NaN(), math.NaN()}, 0, false},
+		{[]float64{1, math.NaN(), 2}, 0, false},
+		{[]float64{math.NaN(), 1, 2}, 1, false},
+		{[]float64{}, 0, true},
+	} {
+		panicked := false
 		func() {
 			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("Expected Max to panic for input %v", test.input)
+				if r := recover(); r != nil {
+					panicked = true
 				}
 			}()
-
-			result := Max(test.input)
-			if result != test.expected {
-				t.Errorf("For input %v, expected %f but got %f", test.input, test.expected, result)
+			got := MaxIdx(c.s)
+			if panicked != c.wantPanic {
+				t.Errorf("MaxIdx(%v) panicked: got %v, want %v", c.s, panicked, c.wantPanic)
+			}
+			if !panicked && got != c.wantIdx {
+				t.Errorf("MaxIdx(%v) = %v, want %v", c.s, got, c.wantIdx)
 			}
 		}()
 	}
 }
-func TestMinIdx(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []float64
-		expected int
-	}{
-		{"Test case 1", []float64{3.5, 2.0, 5.1, 1.2}, 3},
-		{"Test case 2", []float64{10.5, 8.0, 12.3, 9.2}, 1},
-		{"Test case 3", []float64{5.0, 5.0, 5.0, 5.0}, 0},
-		{"Test case 4", []float64{5, 4, 3, 2, math.NaN()}, 3},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := MinIdx(tt.input)
-			if result != tt.expected {
-				t.Errorf("Expected index %d, but got %d", tt.expected, result)
-			}
-		})
-	}
-}
-func TestAddScaledTo(t *testing.T) {
-	// Test cases
-	tests := []struct {
-		dst    []float64
-		y      []float64
-		alpha  float64
-		s      []float64
-		result []float64
-	}{
-		{
-			dst:    []float64{1.0, 2.0, 3.0},
-			y:      []float64{4.0, 5.0, 6.0},
-			alpha:  2.0,
-			s:      []float64{7.0, 8.0, 9.0},
-			result: []float64{18.0, 21.0, 24.0},
-		},
-		// Add more test cases as needed
-	}
-
-	for _, test := range tests {
-		result := AddScaledTo(test.dst, test.y, test.alpha, test.s)
-		for i := 0; i < len(result); i++ {
-			if result[i] != test.result[i] {
-				t.Errorf("Expected %f at index %d, but got %f", test.result[i], i, result[i])
+func TestArgsort(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		n := rand.Intn(100)
+		dst := make([]float64, n)
+		for j := range dst {
+			dst[j] = rand.Float64()
+		}
+		origDst := make([]float64, n)
+		copy(origDst, dst)
+		inds := make([]int, n)
+		Argsort(dst, inds)
+		if !sort.Float64sAreSorted(dst) {
+			t.Errorf("Slice is not sorted: %v", dst)
+		}
+		for j := 0; j < n; j++ {
+			if dst[j] != origDst[inds[j]] {
+				t.Errorf("Index does not match: %v", inds)
 			}
 		}
 	}
-}
-func TestAddTo(t *testing.T) {
-	tests := []struct {
-		name string
-		dst  []float64
-		s    []float64
-		t    []float64
-		want []float64
-	}{
-		{
-			name: "AddTo test case 1",
-			dst:  []float64{1.0, 2.0, 3.0},
-			s:    []float64{4.0, 5.0, 6.0},
-			t:    []float64{7.0, 8.0, 9.0},
-			want: []float64{12.0, 15.0, 18.0},
-		},
-		{
-			name: "AddTo test case 2",
-			dst:  []float64{1.0, 2.0},
-			s:    []float64{4.0, 5.0, 6.0},
-			t:    []float64{7.0, 8.0, 9.0},
-			want: nil, // Expecting panic due to mismatched lengths
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.want == nil {
-				defer func() {
-					if r := recover(); r == nil {
-						t.Errorf("AddTo did not panic")
-					}
-				}()
-			} else {
-				got := make([]float64, len(tt.dst))
-				AddTo(got, tt.s, tt.t)
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("AddTo = %v, want %v", got, tt.want)
-				}
-			}
-		})
-	}
+	// Test that it panics when the argument lengths do not match
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		}
+	}()
+	dst := make([]float64, 10)
+	inds := make([]int, 5)
+	Argsort(dst, inds)
 }
-func TestLogSumExp(t *testing.T) {
-	tests := []struct {
+func TestSpan(t *testing.T) {
+	// Test cases for various inputs.
+	testCases := []struct {
 		name string
-		s    []float64
-		want float64
-	}{
-		{
-			name: "Test case 1",
-			s:    []float64{1, 2, 3},
-			want: 3.4076059644443805,
-		},
-		{
-			name: "Test case 2",
-			s:    []float64{0, 0, 0},
-			want: 0.6931471805599453,
-		},
-		{
-			name: "Test case 3",
-			s:    []float64{-1, -2, -3},
-			want: -0.3068528194400547,
-		},
-		{
-			name: "Test case 4",
-			s:    []float64{math.Inf(-1), math.Inf(1)},
-			want: math.Inf(1),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := LogSumExp(tt.s)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("LogSumExp() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-func TestLogSpan(t *testing.T) {
-	tests := []struct {
 		dst  []float64
 		l    float64
 		u    float64
 		want []float64
 	}{
-		{[]float64{0, 0, 0}, 1, 10, []float64{1, 10, 100}},
-		{[]float64{0, 0, 0, 0}, 1, 100, []float64{1, 10, 100, 1000}},
-		{[]float64{0, 0}, 0, 10, []float64{0, 10}},
-		{[]float64{0, 0}, -1, 10, []float64{math.NaN(), math.NaN()}},
+		{
+			name: "BasicCase",
+			dst:  make([]float64, 5),
+			l:    0.0,
+			u:    1.0,
+			want: []float64{0.0, 0.25, 0.5, 0.75, 1.0},
+		},
+		{
+			name: "NegativeBounds",
+			dst:  make([]float64, 4),
+			l:    -1.0,
+			u:    0.0,
+			want: []float64{-1.0, -0.6666666666666667, -0.3333333333333333, 0.0},
+		},
+		{
+			name: "ZeroLength",
+			dst:  make([]float64, 0),
+			l:    0.0,
+			u:    1.0,
+			want: nil, // Should panic
+		},
+		{
+			name: "InfL",
+			dst:  make([]float64, 4),
+			l:    math.Inf(1),
+			u:    0.0,
+			want: []float64{math.Inf(1), math.Inf(1), math.Inf(1), 0.0},
+		},
+		{
+			name: "InfU",
+			dst:  make([]float64, 4),
+			l:    0.0,
+			u:    math.Inf(1),
+			want: []float64{0.0, math.Inf(1), math.Inf(1), math.Inf(1)},
+		},
+		{
+			name: "BothInfSameSign",
+			dst:  make([]float64, 4),
+			l:    math.Inf(1),
+			u:    math.Inf(1),
+			want: []float64{math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1)},
+		},
+		{
+			name: "BothInfDifferentSign",
+			dst:  make([]float64, 4),
+			l:    math.Inf(-1),
+			u:    math.Inf(1),
+			want: []float64{math.Inf(-1), math.Inf(-1), math.Inf(1), math.Inf(1)},
+		},
+		{
+			name: "NaNU",
+			dst:  make([]float64, 4),
+			l:    0.0,
+			u:    math.NaN(),
+			want: []float64{0.0, math.NaN(), math.NaN(), math.NaN()},
+		},
+		{
+			name: "NaNL",
+			dst:  make([]float64, 4),
+			l:    math.NaN(),
+			u:    1.0,
+			want: []float64{math.NaN(), math.NaN(), math.NaN(), 1.0},
+		},
 	}
 
-	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			got := LogSpan(tt.dst, tt.l, tt.u)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("LogSpan() = %v, want %v", got, tt.want)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if tc.name == "ZeroLength" {
+					if r := recover(); r == nil {
+						t.Errorf("The code did not panic")
+					}
+					return
+				}
+
+				if r := recover(); r != nil {
+					t.Errorf("The code panicked, error %v", r)
+				}
+			}()
+
+			got := Span(tc.dst, tc.l, tc.u)
+
+			if tc.name == "ZeroLength" {
+				return
+			}
+
+			if len(got) != len(tc.want) {
+				t.Errorf("Got %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if math.IsNaN(tc.want[i]) {
+					if !math.IsNaN(got[i]) {
+						t.Errorf("Got %v, want %v", got, tc.want)
+					}
+				} else if got[i] != tc.want[i] {
+					t.Errorf("Got %v, want %v", got, tc.want)
+				}
 			}
 		})
 	}
 }
-func TestSubTo(t *testing.T) {
-	tests := []struct {
-		dst  []float64
-		s    []float64
-		t    []float64
-		want []float64
+func TestDistance(t *testing.T) {
+	for i, c := range []struct {
+		s []float64
+		t []float64
+		L float64
+		e float64
 	}{
-		{[]float64{0, 0, 0}, []float64{4, 5, 6}, []float64{4, 5, 6}, []float64{-4, -5, -6}},
-		{[]float64{-3, -3, -3}, []float64{4, 5, 6}, []float64{7, 8, 9}, []float64{-11, -13, -15}},
-	}
-
-	for _, tt := range tests {
-		got := SubTo(tt.dst, tt.s, tt.t)
-		if !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("SubTo(%v, %v, %v) = %v; want %v", tt.dst, tt.s, tt.t, got, tt.want)
+		{[]float64{1, 2, 3}, []float64{1, 2, 3}, 2, 0},
+		{[]float64{1, 2, 3}, []float64{4, 5, 6}, 1, 9},
+		{[]float64{1, 2, 3}, []float64{4, 5, 6}, 2, math.Sqrt(27)},
+		{[]float64{1, 2, 3}, []float64{4, 5, 6}, 3, math.Cbrt(27)}, // Use math.Cbrt for cube root
+		{[]float64{1, 2, 3}, []float64{4, 5, 6}, math.Inf(1), 3},
+	} {
+		var got float64 = Distance(c.s, c.t, c.L)
+		if !panics(t, "Distance", func() { Distance([]float64{1, 2}, []float64{1}, 2) }) {
+			t.Errorf("Did not panic with unequal lengths")
+		}
+		if got != c.e {
+			t.Errorf("Test %d: Expected %v but got %v", i, c.e, got)
 		}
 	}
 }
-func TestNorm(t *testing.T) {
-	tests := []struct {
-		name     string
-		slice    []float64
-		L        float64
-		expected float64
-	}{
-		{
-			name:     "Test L2 norm",
-			slice:    []float64{1, 2, 3},
-			L:        2,
-			expected: 3.7416573867739413,
-		},
-		{
-			name:     "Test L1 norm",
-			slice:    []float64{1, 2, 3},
-			L:        1,
-			expected: 6,
-		},
-		{
-			name:     "Test Inf norm",
-			slice:    []float64{1, -5, 3},
-			L:        math.Inf(1),
-			expected: 5,
-		},
-		{
-			name:     "Test zero slice",
-			slice:    []float64{},
-			L:        2,
-			expected: 0,
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := Norm(tt.slice, tt.L)
-			if result != tt.expected {
-				t.Errorf("Expected %f, but got %f", tt.expected, result)
+func TestDistanceRandom(t *testing.T) {
+	// This test compares Distance output to a slower version
+	// of the same computation. This version is not as optimized
+	// as the main implementation, but is used here to ensure
+	// correctness.
+	prng := rand.New(rand.NewSource(42))
+	for i := 0; i < 10; i++ {
+		s := make([]float64, prng.Intn(100))
+		t := make([]float64, len(s))
+		for i := range s {
+			s[i] = prng.Float64()
+			t[i] = prng.Float64()
+		}
+		for _, L := range []float64{1, 2, 3, 4, math.Inf(1)} {
+			got := Distance(s, t, L)
+			want := distanceSlow(s, t, L)
+			if !closeEnough(got, want) {
+				t.Errorf("L = %v: Values do not match: Got %v, want %v", L, got, want)
 			}
-		})
+		}
 	}
 }
-func TestAddScaled(t *testing.T) {
-	// Test cases
-	tests := []struct {
-		dst    []float64
-		alpha  float64
+
+func distanceSlow(s, t []float64, L float64) float64 {
+	if len(s) != len(t) {
+		panic(badLength)
+	}
+	if len(s) == 0 {
+		return 0
+	}
+	var norm float64
+	if L == 1 {
+		for i, v := range s {
+			norm += math.Abs(t[i] - v)
+		}
+		return norm
+	}
+	if math.IsInf(L, 1) {
+		for i, v := range s {
+			absDiff := math.Abs(t[i] - v)
+			if absDiff > norm {
+				norm = absDiff
+			}
+		}
+		return norm
+	}
+	for i, v := range s {
+		norm += math.Pow(math.Abs(t[i]-v), L)
+	}
+	return math.Pow(norm, 1/L)
+}
+
+func closeEnough(a, b float64) bool {
+	tol := 1e-12
+	return math.Abs(a-b) < tol
+}
+
+func panics(t *testing.T, name string, f func()) (b bool) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			b = true
+		}
+	}()
+	f()
+	return
+}
+func TestNearestIdxForSpan(t *testing.T) {
+	// Test cases: n, l, u, v, expected index
+	testCases := []struct {
+		n           int
+		l, u, v     float64
+		expectedIdx int
+	}{
+		// Basic cases
+		{2, 0, 1, 0.5, 1},
+		{3, 0, 1, 0.3, 1},
+		{4, 0, 1, 0.8, 3},
+
+		// Edge cases
+		{2, 0, 1, 0, 0},
+		{2, 0, 1, 1, 1},
+		{3, 0, 1, -1, 0},
+		{3, 0, 1, 2, 2},
+
+		// Cases with NaN and Inf
+		{2, math.NaN(), 1, 0.5, 1}, // u is valid, so closest to end
+		{2, 0, math.NaN(), 0.5, 0}, // l is valid, so closest to beginning
+		{2, math.Inf(1), 1, 0.5, 1},
+		{2, 0, math.Inf(1), 0.5, 0},
+		{2, math.Inf(-1), 1, 0.5, 1},
+		{2, 0, math.Inf(-1), 0.5, 0},
+		{2, math.Inf(1), math.Inf(1), 0.5, 0},
+		{3, math.Inf(1), math.Inf(-1), 0.5, 1},
+		{3, math.Inf(1), math.Inf(-1), math.Inf(1), 0},
+		{3, math.Inf(1), math.Inf(-1), math.Inf(-1), 2},
+
+		// Cases with l > u
+		{2, 1, 0, 0.5, 1}, // Inverted range, closest to end
+		{3, 1, 0, 0.7, 0}, // Inverted range, closest to beginning
+		{3, 1, 0, 0.3, 2}, // Inverted range, closest to end
+
+		// Cases with large n
+		{100, 0, 1, 0.25, 25},
+		{100, 0, 1, 0.75, 75},
+	}
+
+	for i, tc := range testCases {
+		idx := NearestIdxForSpan(tc.n, tc.l, tc.u, tc.v)
+		if idx != tc.expectedIdx {
+			t.Errorf("Test case %d failed: expected index %d, got %d for n=%d, l=%v, u=%v, v=%v", i+1, tc.expectedIdx, idx, tc.n, tc.l, tc.u, tc.v)
+		}
+	}
+}
+func TestFind(t *testing.T) {
+	type testCase struct {
+		f      func(float64) bool
 		s      []float64
-		result []float64
-	}{
-		{[]float64{1.0, 2.0, 3.0}, 2.0, []float64{4.0, 5.0, 6.0}, []float64{9.0, 12.0, 15.0}},
-		{[]float64{1.0, 2.0, 3.0}, 0.5, []float64{4.0, 5.0, 6.0}, []float64{3.0, 4.5, 6.0}},
-		{[]float64{1.0, 2.0, 3.0}, -1.0, []float64{4.0, 5.0, 6.0}, []float64{3.0, 1.0, -3.0}},
+		k      int
+		wantIs []int
+		wantErr error
+	}
+	testCases := []testCase{
+		// k < 0
+		{
+			f:      func(v float64) bool { return v > 0 },
+			s:      []float64{-1, 1, 2, -2, 3},
+			k:      -1,
+			wantIs: []int{1, 2, 4},
+		},
+		// k == 0
+		{
+			f:      func(v float64) bool { return v > 0 },
+			s:      []float64{-1, 1, 2, -2, 3},
+			k:      0,
+			wantIs: []int{},
+		},
+		// k > 0, sufficient elements
+		{
+			f:      func(v float64) bool { return v > 0 },
+			s:      []float64{-1, 1, 2, -2, 3},
+			k:      2,
+			wantIs: []int{1, 2},
+		},
+		// k > 0 to few elements
+		{
+			f:      func(v float64) bool { return v > 0 },
+			s:      []float64{-1, 1, 2, -2, 3},
+			k:      10,
+			wantErr: errors.New("floats: insufficient elements found"), // Create a single error instance
+		},
 	}
 
-	for _, test := range tests {
-		// Copy the original destination slice for comparison
-		originalDst := make([]float64, len(test.dst))
-		copy(originalDst, test.dst)
+    // Create the error instance once outside the loop
+    errInsufficientElements := errors.New("floats: insufficient elements found")
 
-		// Call the function
-		AddScaled(test.dst, test.alpha, test.s)
-
-		// Check if the result matches the expected result
-		for i := 0; i < len(test.dst); i++ {
-			if test.dst[i] != test.result[i] {
-				t.Errorf("Expected %f at index %d, but got %f", test.result[i], i, test.dst[i])
+	for i, tc := range testCases {
+		gotIs, gotErr := Find(nil, tc.f, tc.s, tc.k)
+		if tc.wantErr != nil {
+            // Compare error messages instead of using errors.Is
+			if gotErr == nil || gotErr.Error() != errInsufficientElements.Error() {
+				t.Errorf("TestFind(%v): Error mismatch: want %v, got %v", i, tc.wantErr, gotErr)
+			}
+			continue
+		}
+		if len(gotIs) != len(tc.wantIs) {
+			t.Errorf("TestFind(%v): Slice length mismatch: want %v, got %v", i, len(tc.wantIs), len(gotIs))
+			continue
+		}
+		for j := 0; j < len(tc.wantIs); j++ {
+			if gotIs[j] != tc.wantIs[j] {
+				t.Errorf("TestFind(%v): Index mismatch at element %v: want %v, got %v", i, j, tc.wantIs[j], gotIs[j])
 			}
 		}
-
-		// Check if the original destination slice remains unchanged
-		for i := 0; i < len(test.dst); i++ {
-			if originalDst[i] != test.dst[i] {
-				t.Errorf("Original destination slice was modified unexpectedly at index %d", i)
-			}
-		}
 	}
-}
-func TestArgsortStable(t *testing.T) {
-	dst := []float64{3.5, 1.2, 4.7, 2.1}
-	inds := make([]int, len(dst))
-	ArgsortStable(dst, inds)
-
-	// Check if dst is sorted in increasing order
-	for i := 1; i < len(dst); i++ {
-		if dst[i-1] > dst[i] {
-			t.Errorf("dst is not sorted in increasing order")
-		}
-	}
-
-	// Check if inds contains the original position of elements
-	origDst := make([]float64, len(dst))
-	copy(origDst, dst)
-	sort.Float64s(origDst)
-
-	for i := range dst {
-		if dst[i] != origDst[inds[i]] {
-			t.Errorf("inds does not contain the original position of elements")
-		}
-	}
-}
-func TestWithin(t *testing.T) {
-	tests := []struct {
-		name     string
-		s        []float64
-		v        float64
-		expected int
-	}{
-		{
-			name:     "Value within range",
-			s:        []float64{1.0, 2.0, 3.0, 4.0, 5.0},
-			v:        3.5,
-			expected: 2,
-		},
-		{
-			name:     "Value at beginning of range",
-			s:        []float64{1.0, 2.0, 3.0, 4.0, 5.0},
-			v:        1.0,
-			expected: 0,
-		},
-		{
-			name:     "Value at end of range",
-			s:        []float64{1.0, 2.0, 3.0, 4.0, 5.0},
-			v:        5.0,
-			expected: 3,
-		},
-		{
-			name:     "Value less than minimum",
-			s:        []float64{1.0, 2.0, 3.0, 4.0, 5.0},
-			v:        0.5,
-			expected: -1,
-		},
-		{
-			name:     "Value greater than maximum",
-			s:        []float64{1.0, 2.0, 3.0, 4.0, 5.0},
-			v:        6.0,
-			expected: -1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := Within(tt.s, tt.v)
-			if result != tt.expected {
-				t.Errorf("Expected index %d, but got %d", tt.expected, result)
-			}
-		})
-	}
-}
-
-func Within(s []float64, v float64) int {
-	if len(s) < 2 {
-		panic("short span")
-	}
-	if !sort.Float64sAreSorted(s) {
-		panic("floats: input slice not sorted")
-	}
-	if v < s[0] || v >= s[len(s)-1] || math.IsNaN(v) {
-		return -1
-	}
-	for i, f := range s {
-		if v < f {
-			return i
-		}
-	}
-	return -1
 }
