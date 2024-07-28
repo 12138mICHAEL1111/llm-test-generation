@@ -18,7 +18,6 @@ import (
 	"sync"
 	"unicode"
 
-	boltpackageInfo "llm-test-generation/package_Info/boltdb"
 	fastjsonPackageInfo "llm-test-generation/package_Info/fastjson"
 
 	"github.com/google/generative-ai-go/genai"
@@ -159,7 +158,6 @@ func extractFunctionLevel_2(filename string, typeFile string, repo string) map[s
 					}
 				}
 			}
-			funcStr = funcStr + addOptionForBoltdb(repo, paramsTypeList, 2)
 
 			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/fastjson/funSig_2.json")
 
@@ -221,13 +219,12 @@ func extractFunctionLevel_3(filename string, typeFile string, repo string) map[s
 			paramsTypeList := map[string]bool{}
 			if paramsTypes, ok := typeMap[fn.Name.Name]; ok {
 				for _, paramsType := range paramsTypes {
-					if stuctInfo, ok := fastjsonPackageInfo.StructMap_2[paramsType]; ok {
+					if stuctInfo, ok := fastjsonPackageInfo.StructMap_3[paramsType]; ok {
 						funcStr += stuctInfo
 						paramsTypeList[paramsType] = true
 					}
 				}
 			}
-			funcStr = funcStr + addOptionForBoltdb(repo, paramsTypeList, 3)
 
 			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/fastjson/funSig_3.json")
 
@@ -267,28 +264,6 @@ func addFunSig(funcName string, sigJson string) string {
 		combinedValues += value + ", " // 添加空格作为分隔符
 	}
 	return "Here are other function signatures defined in the same source file you may needed, DO NOT generate test functions for them." + combinedValues
-}
-
-func addOptionForBoltdb(repo string, paramTypeList map[string]bool, level int) string {
-	if repo != "boltdb" {
-		return ""
-	}
-
-	flag := true
-
-	for k := range paramTypeList {
-		if k == "Options" {
-			flag = false
-		}
-	}
-	if flag {
-		if level == 2 {
-			return boltpackageInfo.StructMap_2["Options"]
-		} else {
-			return boltpackageInfo.StructMap_3["Options"]
-		}
-	}
-	return ""
 }
 
 func chat(client *openai.Client, prompt string, messages []openai.ChatCompletionMessage) string {

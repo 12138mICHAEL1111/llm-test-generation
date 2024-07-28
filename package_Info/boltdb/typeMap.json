@@ -2,16 +2,19 @@
     "Batch": [
         "DB",
         "Tx",
+        "Options",
         "error"
     ],
     "Begin": [
         "DB",
         "bool",
         "Tx",
+        "Options",
         "error"
     ],
     "Close": [
         "DB",
+        "Options",
         "error"
     ],
     "Error": [
@@ -20,14 +23,17 @@
     ],
     "GoString": [
         "DB",
+        "Options",
         "string"
     ],
     "Info": [
         "DB",
+        "Options",
         "Info"
     ],
     "IsReadOnly": [
         "DB",
+        "Options",
         "bool"
     ],
     "Open": [
@@ -39,15 +45,18 @@
     ],
     "Path": [
         "DB",
-        "string"
+        "string",
+        "Options"
     ],
     "Stats": [
         "DB",
+        "Options",
         "Stats",
         "TxStats"
     ],
     "String": [
         "DB",
+        "Options",
         "string"
     ],
     "Sub": [
@@ -56,15 +65,18 @@
     ],
     "Sync": [
         "DB",
+        "Options",
         "error"
     ],
     "Update": [
         "DB",
+        "Options",
         "Tx",
         "error"
     ],
     "View": [
         "DB",
+        "Options",
         "Tx",
         "error"
     ],
