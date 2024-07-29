@@ -33,7 +33,7 @@ type MutationReport struct {
 	Killed []MutationRecord `json:"killed"`
 }
 
-func rq2_extractFunctionLevel_3(src string, typeFile string, repo string, funName string) string {
+func rq2_extractFunctionLevel_3(src string, typeFile string, funName string) string {
 	file, err := os.Open(typeFile)
 	if err != nil {
 		panic(err)
@@ -78,7 +78,7 @@ func rq2_extractFunctionLevel_3(src string, typeFile string, repo string, funNam
 				}
 			}
 
-			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/gonum/funSig_3.json")
+			funcStr = funcStr + addFunSig(fn.Name.Name, "package_Info/boltdb/funSig_3.json")
 
 			if repo == "fastjson" {
 				funcStr += fastjsonPackageInfo.Conststr_3
@@ -140,7 +140,7 @@ func extractFirstCodeByRegex(completion string) string {
 	return completion
 }
 
-func generatePromptFile(reportFile string, typefile string, repo string) {
+func generatePromptFile(reportFile string, typefile string) {
 	functionNamedata, err := os.ReadFile("function_names.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
@@ -173,7 +173,7 @@ func generatePromptFile(reportFile string, typefile string, repo string) {
 	for checksum, functionName := range functionNameMap {
 		for _, mutants := range report.Killed {
 			if mutants.Checksum == checksum {
-				prompt := rq2_extractFunctionLevel_3(mutants.Mutator.MutatedSourceCode, typefile, repo, functionName)
+				prompt := rq2_extractFunctionLevel_3(mutants.Mutator.MutatedSourceCode, typefile, functionName)
 				promptMap[checksum] = prompt
 				break
 			}
@@ -215,7 +215,7 @@ func generateCompletionFile(client *openai.Client, workers int) {
 
 	completionMap := rq_2_generate(client, promptMap, workers)
 
-	promptFile, err := os.Create("rq2_completion/gonum/completion_1.json")
+	promptFile, err := os.Create("rq2_completion/boltdb/completion_1.json")
 	if err != nil {
 		panic(err)
 	}

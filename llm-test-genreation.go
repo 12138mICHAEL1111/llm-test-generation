@@ -263,7 +263,7 @@ func addFunSig(funcName string, sigJson string) string {
 		}
 		combinedValues += value + ", " // 添加空格作为分隔符
 	}
-	return "Here are other function signatures defined in the same source file you may needed, DO NOT generate test functions for them." + combinedValues
+	return "\nHere are other function signatures defined in the same source file you may needed, DO NOT generate test functions for them." + combinedValues
 }
 
 func chat(client *openai.Client, prompt string, messages []openai.ChatCompletionMessage) string {
