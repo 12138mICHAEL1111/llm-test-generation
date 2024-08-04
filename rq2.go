@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/generative-ai-go/genai"
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -93,7 +94,7 @@ func rq2_extractFunctionLevel_3(src string, typeFile string, funName string) str
 	return funcStr
 }
 
-func rq_2_generate(client *openai.Client, promptMap map[string]string, workers int) map[string]string {
+func rq_2_generate_gpt(client *openai.Client, promptMap map[string]string, workers int) map[string]string {
 	var mutex sync.Mutex
 	wg := sync.WaitGroup{}
 	sem := make(chan struct{}, workers)
@@ -125,6 +126,44 @@ func rq_2_generate(client *openai.Client, promptMap map[string]string, workers i
 			fmt.Printf("Processed %d items, pausing for 1m\n", counter)
 			time.Sleep(1 * time.Minute)
 		}
+	}
+
+	wg.Wait()
+	return completionMap
+}
+
+func rq_2_generate_gemini(model *genai.GenerativeModel, promptMap map[string]string, workers int) map[string]string {
+	var mutex sync.Mutex
+	wg := sync.WaitGroup{}
+	sem := make(chan struct{}, workers)
+
+	completionMap := map[string]string{}
+	counter := 0
+	for checksum, prompt := range promptMap {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(checksum, prompt string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			var completion string
+			if prompt != "" {
+				completion = string(geminiChat(model,prompt,nil))
+			}
+
+			completion = extractFirstCodeByRegex(completion)
+			mutex.Lock()
+			completionMap[checksum] = completion
+			
+			mutex.Unlock()
+		}(checksum, prompt)
+
+		counter++
+		fmt.Println(counter)
+		// if counter%80 == 0 {
+		// 	fmt.Printf("Processed %d items, pausing for 1m\n", counter)
+		// 	time.Sleep(1 * time.Minute)
+		// }
 	}
 
 	wg.Wait()
@@ -196,7 +235,7 @@ func generatePromptFile(reportFile string, typefile string) {
 	}
 }
 
-func generateCompletionFile(client *openai.Client, workers int) {
+func generateCompletionFile_GPT(client *openai.Client, workers int) {
 	promptdata, err := os.ReadFile("prompt.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
@@ -213,9 +252,44 @@ func generateCompletionFile(client *openai.Client, workers int) {
 		return
 	}
 
-	completionMap := rq_2_generate(client, promptMap, workers)
+	completionMap := rq_2_generate_gpt(client, promptMap, workers)
 
 	promptFile, err := os.Create("rq2_completion/boltdb/completion_1.json")
+	if err != nil {
+		panic(err)
+	}
+
+	j, err := json.Marshal(completionMap)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = promptFile.Write(j)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func generateCompletionFile_Gemini(model *genai.GenerativeModel, workers int) {
+	promptdata, err := os.ReadFile("rq2_completion/boltdb/prompt.json")
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	// 创建 map 用来存储 JSON 数据
+	var promptMap map[string]string
+
+	// 解析 JSON 数据到 map
+	err = json.Unmarshal(promptdata, &promptMap)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return
+	}
+
+	completionMap := rq_2_generate_gemini(model, promptMap, workers)
+
+	promptFile, err := os.Create("rq2_completion/boltdb/gemini/completion_1.json")
 	if err != nil {
 		panic(err)
 	}

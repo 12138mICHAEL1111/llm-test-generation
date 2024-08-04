@@ -23,7 +23,7 @@ func geminiChat(model *genai.GenerativeModel, prompt string, messages []*genai.C
 	resp, err := cs.SendMessage(context.Background(), genai.Text(prompt))
 
 	if err != nil {
-		fmt.Println(222)
+		fmt.Println(err)
 		return ""
 	}
 
