@@ -282,13 +282,14 @@ func chat(client *openai.Client, prompt string, messages []openai.ChatCompletion
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model:       openai.GPT3Dot5Turbo0125,
+			Model:       openai.GPT4o,
 			Messages:    promptMessages,
 			Temperature: temp,
 		},
 	)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return ""
 	}
 	return resp.Choices[0].Message.Content
 }

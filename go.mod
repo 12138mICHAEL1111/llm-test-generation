@@ -4,7 +4,7 @@ go 1.21.4
 
 require (
 	github.com/google/generative-ai-go v0.17.0
-	github.com/sashabaranov/go-openai v1.24.1
+	github.com/sashabaranov/go-openai v1.28.1
 	google.golang.org/api v0.186.0
 )
 

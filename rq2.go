@@ -122,7 +122,7 @@ func rq_2_generate_gpt(client *openai.Client, promptMap map[string]string, worke
 
 		counter++
 		fmt.Println(counter)
-		if counter%50 == 0 {
+		if counter%7 == 0 {
 			fmt.Printf("Processed %d items, pausing for 1m\n", counter)
 			time.Sleep(1 * time.Minute)
 		}
@@ -236,7 +236,7 @@ func generatePromptFile(reportFile string, typefile string) {
 }
 
 func generateCompletionFile_GPT(client *openai.Client, workers int) {
-	promptdata, err := os.ReadFile("prompt.json")
+	promptdata, err := os.ReadFile("rq2_completion/fastjson/prompt.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
@@ -254,7 +254,7 @@ func generateCompletionFile_GPT(client *openai.Client, workers int) {
 
 	completionMap := rq_2_generate_gpt(client, promptMap, workers)
 
-	promptFile, err := os.Create("rq2_completion/boltdb/completion_1.json")
+	promptFile, err := os.Create("rq2_completion/fastjson/GPT4o/completion_1.json")
 	if err != nil {
 		panic(err)
 	}
@@ -271,7 +271,7 @@ func generateCompletionFile_GPT(client *openai.Client, workers int) {
 }
 
 func generateCompletionFile_Gemini(model *genai.GenerativeModel, workers int) {
-	promptdata, err := os.ReadFile("rq2_completion/boltdb/prompt.json")
+	promptdata, err := os.ReadFile("rq2_completion/gonum/prompt.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
@@ -289,7 +289,7 @@ func generateCompletionFile_Gemini(model *genai.GenerativeModel, workers int) {
 
 	completionMap := rq_2_generate_gemini(model, promptMap, workers)
 
-	promptFile, err := os.Create("rq2_completion/boltdb/gemini/completion_1.json")
+	promptFile, err := os.Create("rq2_completion/gonum/geminiF/completion_2.json")
 	if err != nil {
 		panic(err)
 	}

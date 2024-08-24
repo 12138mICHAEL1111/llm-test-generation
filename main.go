@@ -90,7 +90,7 @@ func main() {
 		panic(err)
 	}
 
-	model := client.GenerativeModel("gemini-1.5-pro")
+	model := client.GenerativeModel("gemini-1.5-flash")
 	model.SafetySettings = []*genai.SafetySetting{
 		{
 			Category:  genai.HarmCategoryHarassment,
@@ -101,7 +101,7 @@ func main() {
 			Threshold: genai.HarmBlockNone,
 		},
 	}
-	model.SetTemperature(1.0)
+	model.SetTemperature(0.2)
 
 	// geminigenerateTestLevel_3(model, sourceFilePath, basePrompt, 5)
 
@@ -114,6 +114,6 @@ func main() {
 
 	// -------------------
 	// generatePromptFile("/Users/maike/go/src/github.com/boltdb/bolt/reports.json", "package_Info/boltdb/typeMap.json")
-	generateCompletionFile_Gemini(model, 80)
-
+	// generateCompletionFile_GPT(client, 50)
+	generateCompletionFile_Gemini(model,200)
 }
