@@ -84,7 +84,6 @@ func main() {
 	// repairCompilation(client, "test_generation/history/boltdb/temp0.2/level_3/first_run/boltdb_history.gob", errorFilePath, "test_generation/history/boltdb/temp0.2/level_3/second_run/compilation_fixed.gob", "test_generation/function/boltdb/temp0.2/level_3/second_run/compilation_fixed.txt", compilationBasePrompt,5,testFilePath)
 	// repairFailing(client, "test_generation/history/boltdb/temp0.2/level_3/second_run/compilation_fixed.gob", errorFilePath, "test_generation/history/boltdb/temp0.2/level_3/second_run/failed_fixed.gob", "test_generation/function/boltdb/temp0.2/level_3/second_run/failed_fixed.txt", failedTestBasePrompt, 5)
 	ctx := context.Background()
-
 	client, err := genai.NewClient(ctx, option.WithAPIKey("AIzaSyB94op2w6N6YYpck6cK8xcRCXebtEl9nlw"))
 	if err != nil {
 		panic(err)
@@ -115,5 +114,5 @@ func main() {
 	// -------------------
 	// generatePromptFile("/Users/maike/go/src/github.com/boltdb/bolt/reports.json", "package_Info/boltdb/typeMap.json")
 	// generateCompletionFile_GPT(client, 50)
-	generateCompletionFile_Gemini(model,200)
+	generateCompletionFile_Gemini(model, 200)
 }
