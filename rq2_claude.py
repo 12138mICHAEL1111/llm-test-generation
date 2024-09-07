@@ -29,41 +29,39 @@ async def process_prompt(client, checksum, prompt, completion_map, lock, semapho
     if not prompt:
         return
 
-    async with semaphore:  # 控制并发数量
+    async with semaphore:  
 
-        # 因为 claude_chat 是一个同步函数，我们需要使用 run_in_executor 来异步调用它
+       
         loop = asyncio.get_running_loop()
         completion = await loop.run_in_executor(None, claude_chat, client, prompt)
     
     completion = extract_first_code_by_regex(completion)
 
-    async with lock:  # 使用异步锁确保线程安全
+    async with lock:  
         completion_map[checksum] = completion
 
     async with lock:
         completed_tasks[0] += 1
-        print(f"已完成的任务数量: {completed_tasks[0]}")
+        print(f"task: {completed_tasks[0]}")
             
 async def generate_completions(client, prompt_map, workers):
     completion_map = {}
     completed_tasks = [0]
     lock = asyncio.Lock()
-    semaphore = asyncio.Semaphore(workers)  # 控制并发任务数量
+    semaphore = asyncio.Semaphore(workers)  
 
-    # 创建异步任务列表，直接使用 asyncio 创建并发任务
     tasks = [
         process_prompt(client, checksum, prompt, completion_map, lock, semaphore,completed_tasks)
         for checksum, prompt in prompt_map.items()
     ]
 
-    # 使用 asyncio.gather 并发运行所有任务
     await asyncio.gather(*tasks)
 
     return completion_map
 
 def read_json_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
-        data = json.load(file)  # 解析 JSON 文件内容为字典
+        data = json.load(file) 
     return data
 
 async def main():

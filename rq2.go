@@ -18,12 +18,10 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-// Mutator 代表 "mutator" 键的值
 type Mutator struct {
 	MutatedSourceCode string `json:"mutatedSourceCode"`
 }
 
-// MutationRecord 代表 "killed" 数组中的一个元素
 type MutationRecord struct {
 	Mutator  Mutator `json:"mutator"`
 	Checksum string  `json:"checksum"`
@@ -122,7 +120,7 @@ func rq_2_generate_gpt(client *openai.Client, promptMap map[string]string, worke
 
 		counter++
 		fmt.Println(counter)
-		if counter%7 == 0 {
+		if counter%50 == 0 {
 			fmt.Printf("Processed %d items, pausing for 1m\n", counter)
 			time.Sleep(1 * time.Minute)
 		}
@@ -236,16 +234,14 @@ func generatePromptFile(reportFile string, typefile string) {
 }
 
 func generateCompletionFile_GPT(client *openai.Client, workers int) {
-	promptdata, err := os.ReadFile("rq2_completion/fastjson/prompt.json")
+	promptdata, err := os.ReadFile("rq2_completion/boltdb/prompt.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
 	}
 
-	// 创建 map 用来存储 JSON 数据
 	var promptMap map[string]string
 
-	// 解析 JSON 数据到 map
 	err = json.Unmarshal(promptdata, &promptMap)
 	if err != nil {
 		fmt.Println("Error parsing JSON:", err)
@@ -254,7 +250,7 @@ func generateCompletionFile_GPT(client *openai.Client, workers int) {
 
 	completionMap := rq_2_generate_gpt(client, promptMap, workers)
 
-	promptFile, err := os.Create("rq2_completion/fastjson/GPT4o/completion_1.json")
+	promptFile, err := os.Create("rq2_completion/boltdb/GPT4oM/3/completion_1.json")
 	if err != nil {
 		panic(err)
 	}
@@ -277,10 +273,8 @@ func generateCompletionFile_Gemini(model *genai.GenerativeModel, workers int) {
 		return
 	}
 
-	// 创建 map 用来存储 JSON 数据
 	var promptMap map[string]string
 
-	// 解析 JSON 数据到 map
 	err = json.Unmarshal(promptdata, &promptMap)
 	if err != nil {
 		fmt.Println("Error parsing JSON:", err)

@@ -18,7 +18,7 @@ import (
 	"sync"
 	"unicode"
 
-	fastjsonPackageInfo "llm-test-generation/package_Info/fastjson"
+	"llm-test-generation/package_Info/fastjson"
 
 	"github.com/google/generative-ai-go/genai"
 	openai "github.com/sashabaranov/go-openai"
@@ -62,13 +62,12 @@ func extractCodeInFunctionByStr(codeStr string) (error, []string) {
 }
 
 func removeCommentsInFunction(fn *ast.FuncDecl) {
-	// 重置函数的文档注释
+	
 	fn.Doc = nil
-	// 遍历并修改所有节点，移除注释
 	ast.Inspect(fn, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CommentGroup:
-			*x = ast.CommentGroup{} // 移除注释组
+			*x = ast.CommentGroup{} 
 		}
 		return true
 	})
@@ -76,7 +75,7 @@ func removeCommentsInFunction(fn *ast.FuncDecl) {
 
 func formatFunction(fn *ast.FuncDecl, fset *token.FileSet) string {
 	var sb strings.Builder
-	printer.Fprint(&sb, fset, fn) // 使用 printer 包来格式化 AST 节点
+	printer.Fprint(&sb, fset, fn) 
 	return sb.String()
 }
 
@@ -84,15 +83,12 @@ func formatFunction(fn *ast.FuncDecl, fset *token.FileSet) string {
 func extractFunctionLevel_1(filename string, repo string) map[string]string {
 	functionList := map[string]string{}
 	fset := token.NewFileSet()
-	// 解析源文件
 	file, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		panic(err)
 	}
 
-	// 遍历 AST 中的每个节点
 	ast.Inspect(file, func(n ast.Node) bool {
-		// 检查节点是否为函数声明
 		if fn, ok := n.(*ast.FuncDecl); ok {
 			if repo == "boltdb" {
 				if fn.Name.Name == "Error" {
@@ -102,9 +98,7 @@ func extractFunctionLevel_1(filename string, repo string) map[string]string {
 					return true
 				}
 			}
-			// 移除函数中的所有注释
 			removeCommentsInFunction(fn)
-			// 打印没有注释的函数
 			funcStr := formatFunction(fn, fset)
 			p := basePrompt
 			p = strings.Replace(p, "{functionName}", fn.Name.Name, 1)
@@ -255,13 +249,12 @@ func addFunSig(funcName string, sigJson string) string {
 		panic(err)
 	}
 
-	// 遍历 map 的 values 并拼接成一个字符串
 	var combinedValues string
 	for k, value := range funcs {
 		if k == funcName {
 			continue
 		}
-		combinedValues += value + ", " // 添加空格作为分隔符
+		combinedValues += value + ", " 
 	}
 	return "\nHere are other function signatures defined in the same source file you may needed, DO NOT generate test functions for them." + combinedValues
 }
@@ -282,7 +275,7 @@ func chat(client *openai.Client, prompt string, messages []openai.ChatCompletion
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model:       openai.GPT4o,
+			Model:       openai.GPT4oMini,
 			Messages:    promptMessages,
 			Temperature: temp,
 		},
@@ -321,35 +314,27 @@ func extractFuntionName(str string) []string {
 func extractSourceFuntionName(filename string) ([]string, error) {
 	fset := token.NewFileSet() // positions are relative to fset
 
-	// 解析文件
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
 
 	var funcNames []string
-	// 使用 Walk 来遍历所有的节点
 	ast.Inspect(node, func(n ast.Node) bool {
-		// 找到函数声明节点
 		if fn, ok := n.(*ast.FuncDecl); ok {
 			if fn.Recv != nil && len(fn.Recv.List) > 0 {
-				// 获取接收者的类型
 				var recvName string
 				if star, ok := fn.Recv.List[0].Type.(*ast.StarExpr); ok {
-					// 指针接收者
 					recvName = fmt.Sprintf("*%s", star.X.(*ast.Ident).Name)
 				} else {
-					// 非指针接收者
 					recvName = fmt.Sprintf("%s", fn.Recv.List[0].Type.(*ast.Ident).Name)
 				}
-				// 组合接收者和函数名
 				funcNames = append(funcNames, fmt.Sprintf("%s.%s", recvName, fn.Name.Name))
 			} else {
-				// 没有接收者，直接添加函数名
 				funcNames = append(funcNames, fn.Name.Name)
 			}
 		}
-		return true // 继续遍历
+		return true 
 	})
 
 	return funcNames, nil
@@ -458,21 +443,18 @@ func removeFunction(testFile string, errors map[string]string) {
 		panic(err)
 	}
 
-	// 初始化一个新的声明列表
+	
 	var newDecls []ast.Decl
 	for _, decl := range node.Decls {
 		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
 			if _, found := errors[funcDecl.Name.Name]; found {
-				// 如果函数名在 toDelete 中，跳过此声明
 				continue
 			}
 		}
-		// 将非目标函数添加到新的声明列表中
 		newDecls = append(newDecls, decl)
 	}
 	node.Decls = newDecls
 
-	// 创建一个缓冲区并将 AST 输出为 Go 代码
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, node); err != nil {
 		panic(err)
@@ -560,7 +542,7 @@ func repairFailing(client *openai.Client, historyFile string, errorFile string, 
 }
 
 func isEmptyFunction(f *ast.FuncDecl) bool {
-	// 检查函数体是否为空或仅包含注释
+	
 	if f.Body == nil || len(f.Body.List) == 0 {
 		return true
 	}
@@ -575,11 +557,8 @@ func collect_empty(testFilePath string) []string {
 		panic(err)
 	}
 
-	// 遍历 AST
 	ast.Inspect(file, func(n ast.Node) bool {
-		// 检查是否为函数声明
 		if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			// 检查函数是否为空
 			if isEmptyFunction(funcDecl) {
 				emptyFunction = append(emptyFunction, funcDecl.Name.Name)
 			}
@@ -917,7 +896,6 @@ func getTypeName(expr ast.Expr) string {
 			return ident.Name + "." + t.Sel.Name
 		}
 	case *ast.ArrayType:
-		// 对于数组或切片，递归获取元素类型的名称
 		elemType := getTypeName(t.Elt)
 		return elemType
 

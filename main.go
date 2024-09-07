@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/google/generative-ai-go/genai"
-	"google.golang.org/api/option"
 )
 
 func addMapVToSlice(m map[string]string) []string {
@@ -79,28 +77,28 @@ func checkgemini() {
 func main() {
 	// getFunctionSignType(sourceFilePath,"structs/boltdb/typeMap.json")
 
-	// client := openai.NewClient("sk-proj-QSsxtUz5aqUMrvGDyzeDT3BlbkFJotWEWJh6tFd209iQd8VZ")
+	// client := openai.NewClient("your token")
 
 	// repairCompilation(client, "test_generation/history/boltdb/temp0.2/level_3/first_run/boltdb_history.gob", errorFilePath, "test_generation/history/boltdb/temp0.2/level_3/second_run/compilation_fixed.gob", "test_generation/function/boltdb/temp0.2/level_3/second_run/compilation_fixed.txt", compilationBasePrompt,5,testFilePath)
 	// repairFailing(client, "test_generation/history/boltdb/temp0.2/level_3/second_run/compilation_fixed.gob", errorFilePath, "test_generation/history/boltdb/temp0.2/level_3/second_run/failed_fixed.gob", "test_generation/function/boltdb/temp0.2/level_3/second_run/failed_fixed.txt", failedTestBasePrompt, 5)
-	ctx := context.Background()
-	client, err := genai.NewClient(ctx, option.WithAPIKey("AIzaSyB94op2w6N6YYpck6cK8xcRCXebtEl9nlw"))
-	if err != nil {
-		panic(err)
-	}
+	// ctx := context.Background()
+	// client, err := genai.NewClient(ctx, option.WithAPIKey("your token"))
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	model := client.GenerativeModel("gemini-1.5-flash")
-	model.SafetySettings = []*genai.SafetySetting{
-		{
-			Category:  genai.HarmCategoryHarassment,
-			Threshold: genai.HarmBlockNone,
-		},
-		{
-			Category:  genai.HarmCategoryDangerousContent,
-			Threshold: genai.HarmBlockNone,
-		},
-	}
-	model.SetTemperature(0.2)
+	// model := client.GenerativeModel("gemini-1.5-flash")
+	// model.SafetySettings = []*genai.SafetySetting{
+	// 	{
+	// 		Category:  genai.HarmCategoryHarassment,
+	// 		Threshold: genai.HarmBlockNone,
+	// 	},
+	// 	{
+	// 		Category:  genai.HarmCategoryDangerousContent,
+	// 		Threshold: genai.HarmBlockNone,
+	// 	},
+	// }
+	// model.SetTemperature(0.2)
 
 	// geminigenerateTestLevel_3(model, sourceFilePath, basePrompt, 5)
 
@@ -114,5 +112,7 @@ func main() {
 	// -------------------
 	// generatePromptFile("/Users/maike/go/src/github.com/boltdb/bolt/reports.json", "package_Info/boltdb/typeMap.json")
 	// generateCompletionFile_GPT(client, 50)
-	generateCompletionFile_Gemini(model, 200)
+
+	// generateCompletionFile_Gemini(model, 200)
+
 }
